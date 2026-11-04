@@ -1,5 +1,8 @@
 """Desktop interface for the local Rejoin Desk service."""
 import json
+import os
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 import accounts
 from queue import Empty, Queue
 from threading import Event, Thread
@@ -47,7 +50,7 @@ class Desktop:
         toolbar.pack(fill="x", pady=(8, 0))
         tk.Label(toolbar, image=self.portrait, bg=BG).pack(side="left", padx=(0, 8))
         self.toolbar = toolbar
-        for title, action in (("Nick e senha", self.password_dialog), ("Importar contas", self.import_dialog), ("Heartbeat", self.heartbeat), ("Histórico", self.history), ("Atualizações", self.updates)):
+        for title, action in (("Nick e senha", self.password_dialog), ("Importar contas", self.import_dialog), ("Heartbeat", self.heartbeat), ("Histórico", self.history), ("FPS", self.fps_dialog), ("Atualizações", self.updates)):
             self.button(toolbar, title, action, title == "Importar contas").pack(side="left", padx=(0, 6))
         self.button(toolbar, "Encerrar", root.destroy).pack(side="right")
         
@@ -284,6 +287,60 @@ class Desktop:
                                    "Atualização disponível para a edição compilada.")
 
         self.dispatch("/check", {"repo": repo}, checked)
+
+    def fps_dialog(self):
+        import winreg
+
+        body = self.dialog("Limite de FPS")
+        self.label(body, "Aplica ao Roblox Player deste PC na próxima abertura. "
+                   "Feche todas as janelas do Roblox antes de testar.", wrap=500).pack(anchor="w")
+        field = self.entry(body)
+        field.insert(0, "10")
+        field.pack(fill="x", pady=8)
+        status = self.label(body, "", wrap=500)
+        status.pack(anchor="w")
+
+        def change(remove=False):
+            try:
+                fps = None if remove else int(field.get().strip())
+                if fps is not None and not 1 <= fps <= 240:
+                    raise ValueError("Informe um limite entre 1 e 240 FPS.")
+                with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, r"roblox\DefaultIcon") as key:
+                    icon = winreg.QueryValueEx(key, "")[0]
+                folder = Path(os.path.expandvars(icon.rsplit(",", 1)[0].strip().strip('"'))).parent
+                if not folder.name.lower().startswith("version-") or not (folder / "RobloxPlayerBeta.exe").is_file():
+                    raise ValueError("Instalação do Roblox Player não localizada.")
+                target = folder / "ClientSettings" / "ClientAppSettings.json"
+                settings = json.loads(target.read_text(encoding="utf-8-sig")) if target.exists() else {}
+                if not isinstance(settings, dict):
+                    raise ValueError("O arquivo de configuração do Roblox não contém um objeto JSON.")
+                name = "DFIntTaskSchedulerTargetFps"
+                if remove and name not in settings:
+                    status.config(text="Nenhum limite configurado por esse ajuste.")
+                    return
+                if remove:
+                    settings.pop(name)
+                else:
+                    settings[name] = fps
+                target.parent.mkdir(exist_ok=True)
+                temporary = None
+                try:
+                    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=target.parent, delete=False) as output:
+                        temporary = Path(output.name)
+                        json.dump(settings, output, indent=2)
+                    temporary.replace(target)
+                finally:
+                    if temporary is not None:
+                        temporary.unlink(missing_ok=True)
+                status.config(text="Limite removido. Reabra o Roblox." if remove else
+                              f"{fps} FPS configurados. Reabra o Roblox e confira com Shift + F5.")
+            except OSError:
+                status.config(text="Não foi possível acessar a instalação ou gravar a configuração do Roblox.")
+            except ValueError as error:
+                status.config(text=str(error))
+
+        self.button(body, "Aplicar limite", change, True).pack(anchor="w", pady=8)
+        self.button(body, "Remover limite", lambda: change(True)).pack(anchor="w")
 
     def updates(self):
         body = self.dialog("Atualizações")
