@@ -8,7 +8,7 @@ import subprocess
 import sys
 from urllib.request import urlopen
 
-VERSION = "0.4.2"
+VERSION = "0.4.3"
 LIMIT = 100 * 1024 * 1024
 
 def version(value):
@@ -62,7 +62,7 @@ $target = $env:REJOIN_UPDATE_TARGET
 $staged = $target + '.pending'
 $backup = $target + '.previous'
 for ($i=0; $i -lt 80; $i++) {
-  try { [IO.File]::Replace($staged, $target, $backup); Start-Process -FilePath $target; exit 0 }
+  try { [IO.File]::Replace($staged, $target, $backup); $env:PYINSTALLER_RESET_ENVIRONMENT = '1'; Start-Process -FilePath $target; exit 0 }
   catch { Start-Sleep -Milliseconds 500 }
 }
 """
