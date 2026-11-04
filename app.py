@@ -59,9 +59,11 @@ def wait_new_pid(before):
         if len(new) == 1:
             return new.pop()
         if len(new) > 1:
-            break
-        time.sleep(.5)
-    raise ValueError("Não foi possível identificar a nova instância. Fila interrompida.")
+            raise ValueError("Vários processos do Roblox surgiram ao mesmo tempo. Instância não identificada.")
+        QUEUE_CANCEL.wait(.5)
+    if QUEUE_CANCEL.is_set():
+        raise ValueError("Fila cancelada.")
+    raise ValueError("Windows recebeu o pedido, mas nenhum novo processo Roblox apareceu em 50 s.")
 
 def start_job(value):
     global BUSY, WAITING
@@ -101,6 +103,8 @@ def start_job(value):
                     STATUS[identity] = "Na fila"
                 limit = settings["limit"] if MULTI_HANDLE else 1
                 while len(windows.running()) >= limit:
+                    with LOCK:
+                        STATUS[identity] = f"Aguardando vaga ({limit} instâncias permitidas)"
                     if QUEUE_CANCEL.wait(1):
                         return
                 before = windows.running()
@@ -134,18 +138,24 @@ def start_job(value):
                         break
                     QUEUE_CANCEL.wait(.5)
                 if not confirmed:
-                    message = "Fila cancelada" if QUEUE_CANCEL.is_set() else "Heartbeat não confirmado. Fila interrompida."
+                    if QUEUE_CANCEL.is_set():
+                        message = "Fila cancelada"
+                    elif pid in windows.running():
+                        message = "Roblox aberto, mas sem heartbeat confirmado"
+                    else:
+                        message = "Roblox encerrou antes de confirmar o heartbeat"
                     with LOCK:
                         STATUS[identity] = message
                     record(row["username"], message)
-                    break
+                    if QUEUE_CANCEL.is_set():
+                        break
 
         except (ValueError, OSError) as error:
             record("Fila", str(error))
         finally:
             with LOCK:
                 for row in targets:
-                    if STATUS.get(row["userId"]) == "Na fila":
+                    if STATUS.get(row["userId"], "").startswith(("Na fila", "Aguardando vaga")):
                         STATUS[row["userId"]] = "Pronta"
                 WAITING = 0
                 BUSY = False
