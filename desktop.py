@@ -88,6 +88,10 @@ class Desktop:
         self.place = self.entry(sidebar)
         self.place.insert(0, str(settings.get("place", "")))
         self.place.pack(fill="x", ipady=5)
+        self.label(sidebar, "Reconectar após (segundos sem sinal)", wrap=222).pack(anchor="w", pady=(8, 0))
+        self.rejoin_delay = self.entry(sidebar)
+        self.rejoin_delay.insert(0, str(settings.get("rejoin_delay", 20)))
+        self.rejoin_delay.pack(fill="x", ipady=3)
         self.dimensions = {}
         for key, label, default in (("limit", "Limite de instâncias", 2), ("width", "Largura (px)", 320), ("height", "Altura (px)", 240)):
             row = tk.Frame(sidebar, bg=PANEL)
@@ -216,6 +220,12 @@ class Desktop:
             self.notice.config(text="Selecione pelo menos uma conta.")
             return
         payload = {"ids": ids, "place": place}
+        if path == "/rejoin":
+            try:
+                payload["rejoin_delay"] = int(self.rejoin_delay.get().strip())
+            except ValueError:
+                self.notice.config(text="Informe entre 10 e 3600 segundos sem sinal.")
+                return
         if path == "/launch":
             try:
                 payload.update({key: int(field.get()) for key, field in self.dimensions.items()})
