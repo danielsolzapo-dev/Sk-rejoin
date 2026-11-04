@@ -1,5 +1,6 @@
 """Desktop interface for the local Rejoin Desk service."""
 import json
+import accounts
 from queue import Empty, Queue
 from threading import Event, Thread
 import tkinter as tk
@@ -82,6 +83,7 @@ class Desktop:
         self.label(sidebar, "Abrir no Roblox", size=14, bold=True).pack(anchor="w")
         self.label(sidebar, "Place ID", color=MUTED).pack(anchor="w", pady=(12, 4))
         self.place = self.entry(sidebar)
+        self.place.insert(0, str(settings.get("place", "")))
         self.place.pack(fill="x", ipady=5)
         self.dimensions = {}
         for key, label, default in (("limit", "Limite de instâncias", 2), ("width", "Largura (px)", 320), ("height", "Altura (px)", 240)):
@@ -101,6 +103,9 @@ class Desktop:
         self.notice.pack(fill="x", padx=26, pady=12)
         self.root.after(80, self.drain)
         self.refresh()
+        repo = accounts.read(assets / "distribution.json", {}).get("repo", "")
+        if repo:
+            self.check_startup_update(repo)
 
     def label(self, parent, text, size=10, color=TEXT, bold=False, wrap=0):
         return tk.Label(parent, text=text, bg=parent.cget("bg"), fg=color, anchor="w",
@@ -128,7 +133,7 @@ class Desktop:
         request = Request(f"http://127.0.0.1:{self.port}{path}", data=json.dumps(data).encode(),
                           headers={"Content-Type": "application/json", "X-Rejoin-Key": self.key})
         try:
-            with build_opener(ProxyHandler({})).open(request, timeout=1600 if path == "/import" else 45) as response:
+            with build_opener(ProxyHandler({})).open(request, timeout=1600 if path in ("/import", "/install") else 45) as response:
                 return json.load(response)
         except HTTPError as error:
             raise ValueError(json.load(error)["error"]) from None
@@ -263,6 +268,22 @@ class Desktop:
             button = self.button(body, "Copiar script", copy, True)
             button.pack(anchor="w", pady=(8, 0))
         self.run("/script", {}, show)
+
+    def check_startup_update(self, repo):
+        self.pending = True
+        self.notice.config(text="Buscando atualizações no GitHub…")
+
+        def checked(value, error):
+            self.pending = False
+            if error:
+                self.notice.config(text=f"Não foi possível verificar a atualização: {error}")
+            elif value["newer"] and value["installable"]:
+                self.run("/install", {"repo": repo}, lambda _: self.root.destroy())
+            else:
+                self.notice.config(text="Versão atualizada." if not value["newer"] else
+                                   "Atualização disponível para a edição compilada.")
+
+        self.dispatch("/check", {"repo": repo}, checked)
 
     def updates(self):
         body = self.dialog("Atualizações")
