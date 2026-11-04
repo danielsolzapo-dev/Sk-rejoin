@@ -252,14 +252,18 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Seleção inválida.")
                 if ids and (type(place) is not int or not 0 < place < 10**16):
                     raise ValueError("Informe um Place ID válido.")
+                delay = value.get("rejoin_delay", 20)
+                if ids and (type(delay) is not int or not 10 <= delay <= 3600):
+                    raise ValueError("Informe entre 10 e 3600 segundos sem sinal.")
                 known = {a["userId"] for a in accounts.accounts()}
                 with LOCK:
                     if ids:
                         settings = accounts.read(SETTINGS, {})
                         settings["place"] = place
+                        settings["rejoin_delay"] = delay
                         accounts.write(SETTINGS, settings)
                     REJOIN.clear()
-                    REJOIN.update({i: {"place": place, "attempts": 0, "next": 0} for i in ids if i in known})
+                    REJOIN.update({i: {"place": place, "delay": delay, "attempts": 0, "next": 0} for i in ids if i in known})
                 return self.reply(200, {"ok": True})
             if self.path == "/check":
                 info, newer = update.manifest(value.get("repo", ""))
@@ -289,7 +293,7 @@ def watch():
             now = time.monotonic()
             for identity, policy in REJOIN.items():
                 beat = LIVE.get(identity)
-                if not beat or now - beat["received"] < 20 or now < policy["next"] or policy["attempts"] >= 3:
+                if not beat or now - beat["received"] < policy["delay"] or now < policy["next"] or policy["attempts"] >= 3:
                     continue
                 try:
                     record(str(identity), "Tentativa de reconexão")
