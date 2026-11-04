@@ -66,8 +66,10 @@ def authenticated(cookie,ua=''):
     except (ValueError,KeyError,TypeError):raise ValueError('A identificação retornada pelo Roblox é inválida.') from None
     return {'userId':identity,'username':name,'displayName':display}
 
-def save_session(cookie,ua=''):
+def save_session(cookie,ua='',*,expected_username=None):
     identity=authenticated(cookie,ua)
+    if expected_username and identity['username'].casefold()!=expected_username.casefold():
+        raise ValueError('A sessão recebida pertence a outra conta.')
     encrypted=base64.b64encode(protect(json.dumps({'cookie':cookie,'ua':ua}).encode())).decode()
     with LOCK:
         vault=read(VAULT,{})
