@@ -65,7 +65,7 @@ def wait_new_pid(before):
         raise ValueError("Fila cancelada.")
     raise ValueError("Windows recebeu o pedido, mas nenhum novo processo Roblox apareceu em 50 s.")
 
-def start_job(value):
+def start_job(value, *, remember_place=True):
     global BUSY, WAITING
     with LOCK:
         if BUSY:
@@ -75,7 +75,7 @@ def start_job(value):
             raise ValueError("Selecione até 100 contas.")
         if type(place) is not int or not 0 < place < 10**16:
             raise ValueError("Informe um Place ID válido.")
-        settings = accounts.read(SETTINGS, {"limit": 2, "width": 320, "height": 240})
+        settings = {"limit": 2, "width": 320, "height": 240, **accounts.read(SETTINGS, {})}
         for key, minimum, maximum in (("limit", 1, 20), ("width", 160, 1920), ("height", 120, 1080)):
             number = value.get(key, settings[key])
             if type(number) is not int or not minimum <= number <= maximum:
@@ -87,6 +87,8 @@ def start_job(value):
             raise ValueError("Selecione contas cadastradas.")
         if not MULTI_HANDLE and len(targets) > 1:
             raise ValueError(MULTI)
+        if remember_place:
+            settings["place"] = place
         accounts.write(SETTINGS, settings)
         QUEUE_CANCEL.clear()
         BUSY = True
@@ -252,6 +254,10 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Informe um Place ID válido.")
                 known = {a["userId"] for a in accounts.accounts()}
                 with LOCK:
+                    if ids:
+                        settings = accounts.read(SETTINGS, {})
+                        settings["place"] = place
+                        accounts.write(SETTINGS, settings)
                     REJOIN.clear()
                     REJOIN.update({i: {"place": place, "attempts": 0, "next": 0} for i in ids if i in known})
                 return self.reply(200, {"ok": True})
@@ -287,7 +293,7 @@ def watch():
                     continue
                 try:
                     record(str(identity), "Tentativa de reconexão")
-                    start_job({"ids": [identity], "place": policy["place"]})
+                    start_job({"ids": [identity], "place": policy["place"]}, remember_place=False)
                 except ValueError:
                     continue
                 policy["attempts"] += 1
