@@ -20,6 +20,7 @@ jobs:
       - run: python -m compileall -q .
       - run: python tests/test_reconnect.py
       - run: python tests/test_external_launcher.py
+      - run: python tests/test_optimization_block.py
       - shell: pwsh
         run: |
           python -c "import json,os; open('distribution.json','w').write(json.dumps({'repo':os.environ['GITHUB_REPOSITORY']}))"

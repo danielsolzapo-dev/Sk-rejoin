@@ -12,6 +12,8 @@ import accounts
 import update
 import windows
 import bootstrapper
+import optimization
+import server_picker
 
 ASSETS = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
 KEY = accounts.read(accounts.ROOT / "heartbeat-key.json", None) or secrets.token_urlsafe(32)
@@ -46,7 +48,7 @@ def public_state():
             age = round(now - beat["received"]) if beat else None
             policy = REJOIN.get(identity)
             status = STATUS.get(identity, "Pronta")
-            if age is not None and age < 20:
+            if age is not None and age < 20 and not status.startswith("BLOCK ACC"):
                 status = "Online"
             elif beat and status in ("Pronta", "Aguardando heartbeat", "Online"):
                 status = "Sem sinal"
@@ -54,13 +56,13 @@ def public_state():
             if policy and beat:
                 if policy["attempts"] < policy["max_attempts"]:
                     next_in = max(0, round(max(beat["received"] + policy["delay"], policy["next"]) - now))
-            row.update(status=status, age=age, place=beat["place"] if beat else None,
+            row.update(jobId=beat.get("jobId", "") if beat else "", status=status, age=age, place=beat["place"] if beat else None,
                        connected=round(now - beat["since"]) if beat and age < 20 else None,
                        profile=profiles.get(str(identity), {}), rejoin=bool(policy),
                        attempts=policy["attempts"] if policy else 0,
                        maxAttempts=policy["max_attempts"] if policy else None, nextIn=next_in)
         return {"accounts": rows, "waiting": WAITING, "busy": BUSY, "version": update.VERSION,
-                "rejoin": len(REJOIN), "multi": multi_status(), "repo": accounts.read(ASSETS / "distribution.json", {}).get("repo", "")}
+                "rejoin": len(REJOIN), "blockACC": block_enabled(), "economy": bool(accounts.read(SETTINGS, {}).get("economy")), "multi": multi_status(), "repo": accounts.read(ASSETS / "distribution.json", {}).get("repo", "")}
 
 HISTORY = accounts.ROOT / "sk-history.json"
 SETTINGS = accounts.ROOT / "sk-settings.json"
@@ -68,6 +70,7 @@ QUEUE_CANCEL = threading.Event()
 WAITING = 0
 PROFILES = accounts.ROOT / "sk-account-profiles.json"
 BINDINGS = {}
+SERVER_TARGETS = {}
 
 def record(identity, event):
     with LOCK:
@@ -112,6 +115,68 @@ def diagnostic():
     checks.append("Sessões locais cadastradas: " + str(len(accounts.accounts())))
     checks.append("Reconexão aguarda um heartbeat desta execução do app antes de monitorar cada conta.")
     return checks
+
+
+def block_enabled():
+    return accounts.read(SETTINGS, {}).get("blockACC") is True
+
+
+def active_jobs(identity, place):
+    now = time.monotonic()
+    occupied = set()
+    for other, beat in LIVE.items():
+        fresh = now - beat["received"] < max(120, REJOIN.get(other, {}).get("delay", 20))
+        if other != identity and beat["place"] == place and fresh:
+            if not beat.get("jobId"):
+                raise ValueError("BLOCK ACC: atualize o heartbeat das contas abertas para informar o servidor.")
+            occupied.add(beat["jobId"])
+    for other, target in SERVER_TARGETS.items():
+        if other != identity and target["place"] == place and target["expires"] > now:
+            occupied.add(target["jobId"])
+    return occupied
+
+
+def choose_server(identity, place):
+    with LOCK:
+        active_jobs(identity, place)
+    options = server_picker.candidates(place)
+    with LOCK:
+        occupied = active_jobs(identity, place)
+        for job in options:
+            if job not in occupied:
+                SERVER_TARGETS[identity] = {"place": place, "jobId": job, "expires": time.monotonic() + 180}
+                return job
+    raise ValueError("BLOCK ACC: nenhum servidor diferente disponível na consulta. Tente novamente depois.")
+
+
+def collision_action(identity):
+    if not block_enabled():
+        return {}
+    with LOCK:
+        beat = LIVE[identity]
+        if not beat.get("jobId"):
+            return {}
+        members = [(other_beat.get("joined", other_beat["since"]), other) for other, other_beat in LIVE.items()
+                   if other_beat["place"] == beat["place"] and other_beat.get("jobId") == beat["jobId"]
+                   and time.monotonic() - other_beat["received"] < 35]
+        if len(members) < 2 or min(members)[1] == identity:
+            if STATUS.get(identity, "").startswith("BLOCK ACC"):
+                STATUS[identity] = "Online"
+            return {}
+        place = beat["place"]
+        STATUS[identity] = "BLOCK ACC · procurando outro servidor"
+    try:
+        job = choose_server(identity, place)
+        with LOCK:
+            if not block_enabled():
+                SERVER_TARGETS.pop(identity, None)
+                return {}
+            STATUS[identity] = "BLOCK ACC · troca de servidor solicitada"
+        return {"relocate": {"placeId": place, "jobId": job}}
+    except (ValueError, OSError):
+        with LOCK:
+            STATUS[identity] = "BLOCK ACC · colisão sem destino disponível; confira a conta"
+        return {"stop": "BLOCK ACC: outro cliente gerenciado já está neste servidor. Aguarde um destino disponível no app."}
 
 
 def wait_new_pid(before):
@@ -190,7 +255,8 @@ def start_job(value, *, remember_place=True):
                 sent_at = time.monotonic()
                 record(row["username"], "Abertura solicitada")
                 try:
-                    accounts.launch(row["username"], target_place, before_open=lambda: not QUEUE_CANCEL.is_set())
+                    job = choose_server(identity, target_place) if block_enabled() else ""
+                    accounts.launch(row["username"], target_place, job=job, before_open=lambda: not QUEUE_CANCEL.is_set())
                     pid = wait_new_pid(before)
                     BINDINGS[identity] = (pid, windows.process_stamp(pid))
                     if before:
@@ -217,7 +283,8 @@ def start_job(value, *, remember_place=True):
                 while time.monotonic() < deadline and not QUEUE_CANCEL.is_set():
                     with LOCK:
                         beat = LIVE.get(identity)
-                        confirmed = bool(beat and beat["received"] >= sent_at and beat["place"] == target_place and beat["session"] != previous_session)
+                        confirmed = bool(beat and beat["received"] >= sent_at and beat["place"] == target_place and beat["session"] != previous_session and
+                                         (not job or beat.get("jobId") == job))
                     if confirmed:
                         break
                     QUEUE_CANCEL.wait(.5)
@@ -226,7 +293,10 @@ def start_job(value, *, remember_place=True):
                         STATUS[identity] = "Online"
                     record(row["username"], "Nova sessão confirmada pelo heartbeat")
                 if not confirmed:
-                    if QUEUE_CANCEL.is_set():
+                    if block_enabled() and not QUEUE_CANCEL.is_set():
+                        message = "BLOCK ACC: servidor não confirmado. Atualize o heartbeat e confira a conta."
+                        QUEUE_CANCEL.set()
+                    elif QUEUE_CANCEL.is_set():
                         message = "Fila cancelada"
                     elif pid in windows.running():
                         message = "Roblox aberto, mas sem heartbeat confirmado"
@@ -289,6 +359,9 @@ class Handler(BaseHTTPRequestHandler):
                 identity, place, session = (value.get(k) for k in ("userId", "placeId", "session"))
                 if type(identity) is not int or type(place) is not int or place <= 0 or not isinstance(session, str) or not 1 <= len(session) <= 80:
                     raise ValueError("Heartbeat inválido.")
+                job = value.get("jobId", "")
+                if not isinstance(job, str) or (job and not server_picker.JOB.fullmatch(job)):
+                    raise ValueError("Identificador de servidor inválido.")
                 with LOCK:
                     if not any(a["userId"] == identity for a in accounts.accounts()):
                         return self.reply(404, {"error": "Conta não cadastrada."})
@@ -298,13 +371,49 @@ class Handler(BaseHTTPRequestHandler):
                     now = time.monotonic()
                     continuous = previous and previous["session"] == session and now - previous["received"] < 20
                     since = previous["since"] if continuous else now
-                    LIVE[identity] = {"received": now, "place": place, "session": session, "since": since}
+                    LIVE[identity] = {"received": now, "place": place, "session": session, "since": since, "jobId": job,
+                                      "joined": previous.get("joined", now) if previous and previous.get("jobId") == job and previous["session"] == session else now}
                     policy = REJOIN.get(identity)
                     if policy and now - since >= 120 and policy["attempts"]:
                         policy["attempts"] = 0
                         policy["next"] = 0
                         save_profiles()
-                return self.reply(200, {"ok": True})
+                return self.reply(200, {"ok": True, **collision_action(identity)})
+            if self.path == "/optimization":
+                with LOCK:
+                    if BUSY or windows.running():
+                        raise ValueError("Cancele a fila e feche os Roblox antes de alterar o perfil gráfico.")
+                    action = value.get("action")
+                    if action == "apply":
+                        folder = value.get("folder", "")
+                        if not isinstance(folder, str) or len(folder) > 2048:
+                            raise ValueError("Pasta da instalação inválida.")
+                        result = optimization.apply(folder, value.get("fps", 10))
+                    elif action == "restore":
+                        result = optimization.restore()
+                    else:
+                        raise ValueError("Ação de otimização inválida.")
+                    settings = accounts.read(SETTINGS, {})
+                    settings["economy"] = action == "apply"
+                    settings["optimizationFolder"] = result["folder"]
+                    accounts.write(SETTINGS, settings)
+                return self.reply(200, result)
+            if self.path == "/block-acc":
+                enabled = value.get("enabled")
+                if type(enabled) is not bool:
+                    raise ValueError("Estado do BLOCK ACC inválido.")
+                with LOCK:
+                    if BUSY:
+                        raise ValueError("Cancele a fila antes de mudar BLOCK ACC.")
+                    settings = accounts.read(SETTINGS, {})
+                    settings["blockACC"] = enabled
+                    accounts.write(SETTINGS, settings)
+                    if not enabled:
+                        SERVER_TARGETS.clear()
+                        for identity, status in list(STATUS.items()):
+                            if status.startswith("BLOCK ACC"):
+                                STATUS[identity] = "Pronta"
+                return self.reply(200, {"enabled": enabled})
             if self.path == "/bootstrapper":
                 action = value.get("action", "state")
                 if action == "state":

@@ -2,6 +2,20 @@
 
 Aplicativo Windows x64 para suas sessões Roblox. Baixe `RejoinDesk.exe` em Releases. O app consulta atualizações do GitHub ao iniciar, verifica tamanho e SHA-256 e reinicia quando há versão nova.
 
+## 0.7.0
+
+**Otimizar** abre Config → Desempenho e BLOCK ACC. Escolha a pasta que contém RobloxPlayerBeta.exe usada pelo WebLauncher ou deixe vazio para detectar a instalação registrada. Feche os Roblox e aplique o perfil econômico. Ele solicita texturas mínimas, MSAA 1x, qualidade de renderização 1, grama e distâncias CSG reduzidas e teto de FPS escolhido (padrão 10).
+
+A aceitação dessas flags depende do cliente. O app modifica o ClientAppSettings.json da instalação selecionada. Configurações internas próprias do executável WebLauncher não têm uma API documentada e são ajustadas na janela da ferramenta. Quando a pasta da versão do Roblox mudar, selecione a nova instalação para reaplicar o perfil.
+
+O backup guarda os valores anteriores das flags afetadas. Restaurar anterior recupera essas chaves na última instalação otimizada e preserva as demais chaves. Reaplicar o perfil mantém o backup original. O modo econômico do app recolhe o banner e atualiza a interface a cada 4 segundos, mantendo o heartbeat independente.
+
+**BLOCK ACC** é opcional e vem desligado. Quando ativado, aberturas e reconexões selecionam servidores públicos diferentes para as contas acompanhadas pelo mesmo SK Rejoin neste PC. A seleção usa o JobId completo, reservas temporárias e a lista pública do Roblox. Falha de consulta, ausência de servidor ou heartbeat antigo interrompem a abertura em vez de escolher um servidor aleatório.
+
+Atualize o script em Heartbeat e no Auto Execute de cada cliente. A coluna Servidor mostra o início do JobId ou Atualizar HB. O heartbeat detecta colisões após entradas externas ou teletransportes e solicita que a conta que chegou depois vá a outro servidor. Se não houver destino disponível, essa conta é desconectada para interromper a disputa. A janela pode continuar aberta e exigir revisão manual. O script precisa executar novamente depois de cada entrada/teleporte.
+
+Esta coordenação é local ao app e não separa contas de outros PCs, apps ou clientes sem heartbeat. A lista de servidores pode mudar entre consulta e entrada. Os testes cobrem escolha e reserva concorrentes, colisão, indisponibilidade, restauração e interface Windows. Teleporte e comportamento das flags em um Roblox real precisam de validação nos seus PCs.
+
 ## 0.6.0
 
 - A fila usa o limite configurado mesmo quando a reserva interna do modo multi não está disponível. O aviso aparece em Config e no histórico. Um novo processo junto da instância anterior confirma que múltiplos processos foram observados, e o heartbeat confirma cada conta.

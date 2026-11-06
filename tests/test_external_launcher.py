@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory() as temporary:
     launches = []
     active = {}
 
-    def launch(name, place, before_open=None):
+    def launch(name, place, job="", before_open=None):
         assert before_open()
         pid = 100 + len(launches)
         identity = 1 if name == 'first' else 2

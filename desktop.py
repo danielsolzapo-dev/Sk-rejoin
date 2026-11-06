@@ -22,6 +22,7 @@ class Desktop:
         self.rows = {}
         self.state = {}
         self.pending = False
+        self.economy = bool(settings.get("economy"))
         root.title("SK Rejoin")
         if (assets / "artwork" / "sk.ico").exists():
             root.iconbitmap(str(assets / "artwork" / "sk.ico"))
@@ -52,8 +53,11 @@ class Desktop:
         toolbar.pack(fill="x", pady=(8, 0))
         tk.Label(toolbar, image=self.portrait, bg=BG).pack(side="left", padx=(0, 8))
         self.toolbar = toolbar
-        for title, action in (("Nick e senha", self.password_dialog), ("Importar contas", self.import_dialog), ("Heartbeat", self.heartbeat), ("Histórico", self.history), ("Diagnóstico", self.diagnostic), ("Compacto", self.toggle_compact), ("FPS", self.fps_dialog), ("Atualizações", self.updates)):
-            self.button(toolbar, title, action, title == "Importar contas").pack(side="left", padx=(0, 6))
+        toolsbar = tk.Frame(header, bg=BG)
+        toolsbar.pack(fill="x", pady=(6, 0))
+        for title, action in (("Nick e senha", self.password_dialog), ("Importar contas", self.import_dialog), ("Heartbeat", self.heartbeat), ("Histórico", self.history), ("Otimizar", self.show_optimization), ("Diagnóstico", self.diagnostic), ("Compacto", self.toggle_compact), ("FPS", self.fps_dialog), ("Atualizações", self.updates)):
+            host = toolbar if title in ("Nick e senha", "Importar contas", "Heartbeat", "Histórico") else toolsbar
+            self.button(host, title, action, title == "Importar contas").pack(side="left", padx=(0, 6))
         self.button(toolbar, "Encerrar", root.destroy).pack(side="right")
         
         self.tabs = ttk.Notebook(root)
@@ -65,7 +69,7 @@ class Desktop:
         style.configure("TNotebook", background=BG, borderwidth=0)
         style.configure("TNotebook.Tab", padding=(20, 8), background=LINE, foreground=TEXT)
         style.map("TNotebook.Tab", background=[("selected", "#51402b")])
-        self.build_config(config)
+        self.build_config(config, settings)
         metrics = tk.Frame(sessions, bg=BG)
         metrics.pack(fill="x", padx=26, pady=(0, 14))
         self.metrics = []
@@ -82,8 +86,8 @@ class Desktop:
         accounts_panel = tk.Frame(content, bg=PANEL, padx=12, pady=12)
         accounts_panel.pack(side="left", fill="both", expand=True, padx=(0, 12))
         self.label(accounts_panel, "Suas contas", size=14, bold=True).pack(anchor="w", pady=(0, 9))
-        self.table = ttk.Treeview(accounts_panel, columns=("account", "status", "age", "connected", "retry"), show="headings", selectmode="extended")
-        for column, name, width in (("account", "CONTA", 145), ("status", "ESTADO", 190), ("age", "ÚLTIMO SINAL", 90), ("connected", "CONECTADA", 85), ("retry", "RECONEXÃO", 110)):
+        self.table = ttk.Treeview(accounts_panel, columns=("account", "status", "age", "connected", "retry", "server"), show="headings", selectmode="extended")
+        for column, name, width in (("account", "CONTA", 145), ("status", "ESTADO", 190), ("age", "ÚLTIMO SINAL", 90), ("connected", "CONECTADA", 85), ("retry", "RECONEXÃO", 110), ("server", "SERVIDOR", 85)):
             self.table.heading(column, text=name, anchor="w")
             self.table.column(column, width=width, minwidth=75)
         scrollbar = ttk.Scrollbar(accounts_panel, orient="vertical", command=self.table.yview)
@@ -141,20 +145,60 @@ class Desktop:
         self.notice = self.label(root, "Iniciando…", color=MINT, wrap=950)
         self.notice.pack(fill="x", padx=26, pady=12)
         self.root.after(80, self.drain)
+        if self.economy:
+            self.toggle_compact()
         self.refresh()
         repo = accounts.read(assets / "distribution.json", {}).get("repo", "")
         if repo:
             self.check_startup_update(repo)
 
-    def build_config(self, parent):
-        box = tk.Frame(parent, bg=PANEL, padx=20, pady=18)
+    def build_config(self, parent, settings):
+        options = ttk.Notebook(parent)
+        self.config_sections = options
+        options.pack(fill="both", expand=True)
+        performance = tk.Frame(options, bg=BG)
+        launchers = tk.Frame(options, bg=BG)
+        options.add(performance, text="Desempenho e BLOCK ACC")
+        options.add(launchers, text="WebLauncher")
+        panel = tk.Frame(performance, bg=PANEL, padx=20, pady=16)
+        panel.pack(fill="x", padx=18, pady=12)
+        self.label(panel, "Otimizar para economizar recursos", size=15, bold=True).pack(anchor="w")
+        self.label(panel, "Texturas mínimas, efeitos reduzidos, grama removida e teto de FPS. "
+                   "Feche os Roblox antes de aplicar ou restaurar. Alguns ajustes dependem da versão do cliente.", color=MUTED, wrap=800).pack(anchor="w", pady=8)
+        self.opt_folder = self.entry(panel)
+        self.opt_folder.insert(0, settings.get("optimizationFolder", ""))
+        self.opt_folder.pack(fill="x", pady=4)
+        self.button(panel, "Escolher pasta do Roblox", self.choose_optimization_folder).pack(anchor="w")
+        self.label(panel, "Pasta com RobloxPlayerBeta.exe. Vazio usa a instalação registrada no Windows.", color=MUTED, wrap=800).pack(anchor="w", pady=5)
+        line = tk.Frame(panel, bg=PANEL)
+        line.pack(fill="x", pady=8)
+        self.label(line, "Teto de FPS").pack(side="left", padx=(0, 8))
+        self.opt_fps = self.entry(line)
+        self.opt_fps.config(width=5)
+        self.opt_fps.insert(0, "10")
+        self.opt_fps.pack(side="left", padx=(0, 12))
+        self.button(line, "OTIMIZAR", lambda: self.optimize("apply"), True).pack(side="left", padx=(0, 8))
+        self.button(line, "Restaurar anterior", lambda: self.optimize("restore")).pack(side="left")
+        self.opt_status = self.label(panel, "O perfil também reduz a frequência de atualização do painel e recolhe o banner.", wrap=800)
+        self.opt_status.pack(anchor="w")
+        block = tk.Frame(performance, bg=PANEL, padx=20, pady=16)
+        block.pack(fill="x", padx=18, pady=(0, 12))
+        self.label(block, "BLOCK ACC", size=15, bold=True).pack(anchor="w")
+        self.block_acc = tk.BooleanVar(value=settings.get("blockACC") is True)
+        tk.Checkbutton(block, text="Separar contas em servidores públicos diferentes", variable=self.block_acc,
+                       command=self.save_block_acc, bg=PANEL, fg=TEXT, selectcolor=BG,
+                       activebackground=PANEL, activeforeground=TEXT).pack(anchor="w", pady=8)
+        self.label(block, "Vale para as contas acompanhadas neste app e PC. Use o novo heartbeat no Auto Execute. "
+                   "Se uma colisão for detectada, o coletor solicita outro servidor. Sem destino disponível, "
+                   "a conta duplicada é desconectada para interromper a disputa.", color=MUTED, wrap=800).pack(anchor="w")
+        box = tk.Frame(launchers, bg=PANEL, padx=20, pady=18)
         box.pack(fill="x", padx=22, pady=15)
         self.label(box, "Multi Roblox", size=16, bold=True).pack(anchor="w")
         self.config_multi = self.label(box, "Conferindo modo de abertura…", color=MINT, wrap=850)
         self.config_multi.pack(anchor="w", pady=8)
         self.label(box, "O limite escolhido na aba Contas vale também com launchers externos. "
                    "Um novo processo é conferido após cada abertura.", color=MUTED, wrap=850).pack(anchor="w")
-        tools = tk.Frame(parent, bg=PANEL, padx=20, pady=18)
+        tools = tk.Frame(launchers, bg=PANEL, padx=20, pady=18)
         tools.pack(fill="x", padx=22, pady=(0, 15))
         self.label(tools, "Downgrade / WebLauncher", size=16, bold=True).pack(anchor="w")
         self.label(tools, "Baixe ou escolha o WebLauncher. Abra a ferramenta para selecionar e aplicar "
@@ -169,6 +213,42 @@ class Desktop:
         self.button(actions, "Escolher existente", self.choose_bootstrapper).pack(side="left")
         self.label(tools, "Depois de configurar, o SK Rejoin abre os jogos pelo launcher associado "
                    "ao protocolo Roblox no Windows.", color=MUTED, wrap=850).pack(anchor="w", pady=(10, 0))
+
+    def show_optimization(self):
+        self.tabs.select(1)
+        self.config_sections.select(0)
+
+    def choose_optimization_folder(self):
+        folder = filedialog.askdirectory(parent=self.root, title="Pasta com RobloxPlayerBeta.exe")
+        if folder:
+            self.opt_folder.delete(0, "end")
+            self.opt_folder.insert(0, folder)
+
+    def optimize(self, action):
+        try:
+            fps = int(self.opt_fps.get()) if action == "apply" else 10
+        except ValueError:
+            self.opt_status.config(text="Informe um teto de FPS inteiro.")
+            return
+        def done(result):
+            self.opt_status.config(text=result["message"])
+            self.economy = action == "apply"
+            if self.compact != self.economy:
+                self.toggle_compact()
+        self.run("/optimization", {"action": action, "fps": fps, "folder": self.opt_folder.get().strip()}, done)
+
+    def save_block_acc(self):
+        desired = self.block_acc.get()
+        def done(value, error):
+            self.pending = False
+            if error:
+                self.block_acc.set(not desired)
+            self.notice.config(text=error or ("BLOCK ACC ativado. Confira o novo heartbeat nas contas abertas." if value["enabled"] else "BLOCK ACC desativado."))
+        if self.pending:
+            self.block_acc.set(not desired)
+            return
+        self.pending = True
+        self.dispatch("/block-acc", {"enabled": desired}, done)
 
     def bootstrap_action(self, action, path=None):
         def done(value):
@@ -270,7 +350,8 @@ class Desktop:
                 values = (row["username"], row["status"], "—" if row["age"] is None else f'{row["age"]} s',
                           '—' if row.get('connected') is None else f'{row["connected"]//60} min',
                           ('Pausada' if not row.get('rejoin') else f'{row["attempts"]}/{row["maxAttempts"]}' +
-                           (' · limite atingido' if row['attempts'] >= row['maxAttempts'] else ' · aguardando sinal' if row.get('nextIn') is None else f' · {row["nextIn"]}s')))
+                           (' · limite atingido' if row['attempts'] >= row['maxAttempts'] else ' · aguardando sinal' if row.get('nextIn') is None else f' · {row["nextIn"]}s')),
+                          row.get('jobId', '')[:8] or ('Atualizar HB' if state.get('blockACC') and row['age'] is not None else '—'))
                 tags = ("online",) if row["status"] == "Online" else ("offline",) if row["status"] == "Sem sinal" else ()
                 if identity in self.rows:
                     self.table.item(identity, values=values, tags=tags)
@@ -281,7 +362,7 @@ class Desktop:
                 label.config(text=value)
             self.config_multi.config(text=state["multi"])
             self.rejoin_status.config(text=f'{state["rejoin"]} conta(s) com reconexão ativa\n{state["multi"]}\nVersão {state["version"]}')
-        self.root.after(2000, self.refresh)
+        self.root.after(4000 if self.economy else 2000, self.refresh)
 
     def select_all(self):
         self.table.selection_set(self.table.get_children())
@@ -419,6 +500,9 @@ class Desktop:
         status.pack(anchor="w")
 
         def change(remove=False):
+            if self.pending:
+                status.config(text="Aguarde a operação atual.")
+                return
             try:
                 fps = None if remove else int(field.get().strip())
                 if fps is not None and not 1 <= fps <= 240:
