@@ -149,6 +149,18 @@ def choose_server(identity, place):
     raise ValueError("BLOCK ACC: nenhum servidor diferente disponível na consulta. Tente novamente depois.")
 
 
+def server_confirmed(identity, beat):
+    """Confirm the observed server after normal matchmaking or relocation."""
+    if not block_enabled():
+        return True
+    if not beat.get("jobId"):
+        return False
+    try:
+        return beat["jobId"] not in active_jobs(identity, beat["place"])
+    except ValueError:
+        return False
+
+
 def collision_action(identity):
     if not block_enabled():
         return {}
@@ -255,7 +267,11 @@ def start_job(value, *, remember_place=True):
                 sent_at = time.monotonic()
                 record(row["username"], "Abertura solicitada")
                 try:
-                    job = choose_server(identity, target_place) if block_enabled() else ""
+                    # Use normal matchmaking for the installed client.
+                    # Public job IDs can be stale or incompatible with that version.
+                    with LOCK:
+                        SERVER_TARGETS.pop(identity, None)
+                    job = ""
                     accounts.launch(row["username"], target_place, job=job, before_open=lambda: not QUEUE_CANCEL.is_set())
                     pid = wait_new_pid(before)
                     BINDINGS[identity] = (pid, windows.process_stamp(pid))
@@ -278,13 +294,13 @@ def start_job(value, *, remember_place=True):
                 with LOCK:
                     STATUS[identity] = "Aguardando heartbeat"
                 record(row["username"], f"Janela medida em {size[0]} × {size[1]} px" if size else "Janela compacta não confirmada")
-                deadline = time.monotonic() + 30
+                deadline = time.monotonic() + (90 if block_enabled() else 30)
                 confirmed = False
                 while time.monotonic() < deadline and not QUEUE_CANCEL.is_set():
                     with LOCK:
                         beat = LIVE.get(identity)
                         confirmed = bool(beat and beat["received"] >= sent_at and beat["place"] == target_place and beat["session"] != previous_session and
-                                         (not job or beat.get("jobId") == job))
+                                         server_confirmed(identity, beat))
                     if confirmed:
                         break
                     QUEUE_CANCEL.wait(.5)

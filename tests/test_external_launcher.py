@@ -23,6 +23,7 @@ with tempfile.TemporaryDirectory() as temporary:
 
     def launch(name, place, job="", before_open=None):
         assert before_open()
+        assert job == "", "Initial launch must use normal matchmaking even with BLOCK ACC"
         pid = 100 + len(launches)
         identity = 1 if name == 'first' else 2
         active.update(pid=pid, identity=identity, place=place)
@@ -31,7 +32,7 @@ with tempfile.TemporaryDirectory() as temporary:
 
     def compact(*args):
         now = time.monotonic()
-        app.LIVE[active['identity']] = {'received': now, 'since': now, 'place': active['place'], 'session': str(active['pid'])}
+        app.LIVE[active['identity']] = {'received': now, 'since': now, 'place': active['place'], 'session': str(active['pid']), 'jobId': 'server-' + str(active['pid'])}
         return (320, 240)
 
     class InlineThread:
@@ -43,11 +44,22 @@ with tempfile.TemporaryDirectory() as temporary:
     with patch.object(app.threading, 'Thread', InlineThread), patch.object(app.windows, 'running', lambda: running.copy()), \
             patch.object(app.accounts, 'launch', launch), patch.object(app, 'wait_new_pid', lambda before: active['pid']), \
             patch.object(app.windows, 'process_stamp', lambda pid: pid * 10), patch.object(app.windows, 'compact', compact), \
-            patch.object(app.QUEUE_CANCEL, 'wait', lambda seconds: False):
+            patch.object(app.QUEUE_CANCEL, 'wait', lambda seconds: False), \
+            patch.object(app, 'block_enabled', lambda: True), \
+            patch.object(app, 'choose_server', side_effect=AssertionError('Do not force a public server before launch')):
         app.start_job({'ids': [1, 2], 'place': 10, 'limit': 9})
     assert launches == ['first', 'second']
     assert len(running) == 3 and app.MULTI_OBSERVED and not app.BUSY and app.WAITING == 0
     assert all(app.STATUS[identity] == 'Online' for identity in (1, 2))
+
+    with patch.object(app, 'block_enabled', lambda: True):
+        assert app.server_confirmed(1, app.LIVE[1])
+        assert not app.server_confirmed(1, {**app.LIVE[1], 'jobId': ''})
+        assert not app.server_confirmed(1, {**app.LIVE[1], 'jobId': app.LIVE[2]['jobId']})
+        previous = app.LIVE[2]['jobId']
+        app.LIVE[2]['jobId'] = ''
+        assert not app.server_confirmed(1, app.LIVE[1])
+        app.LIVE[2]['jobId'] = previous
 
     raw = b'MZ-test-release'
     info = {'version': '2.1.5', 'size': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(),
