@@ -28,29 +28,81 @@ MULTI_HANDLE = None
 def public_state():
     now = time.monotonic()
     with LOCK:
+        profiles = accounts.read(PROFILES, {})
         rows = accounts.accounts()
         for row in rows:
             identity = row["userId"]
             beat = LIVE.get(identity)
             age = round(now - beat["received"]) if beat else None
+            policy = REJOIN.get(identity)
             status = STATUS.get(identity, "Pronta")
             if age is not None and age < 20:
                 status = "Online"
-            elif beat and status in ("Pronta", "Aguardando heartbeat"):
+            elif beat and status in ("Pronta", "Aguardando heartbeat", "Online"):
                 status = "Sem sinal"
-            row.update(status=status, age=age, place=beat["place"] if beat else None)
-        return {"accounts": rows, "waiting": WAITING, "busy": BUSY, "version": update.VERSION, "rejoin": len(REJOIN), "multi": MULTI, "repo": accounts.read(ASSETS / "distribution.json", {}).get("repo", "")}
+            next_in = None
+            if policy and beat:
+                if policy["attempts"] < policy["max_attempts"]:
+                    next_in = max(0, round(max(beat["received"] + policy["delay"], policy["next"]) - now))
+            row.update(status=status, age=age, place=beat["place"] if beat else None,
+                       connected=round(now - beat["since"]) if beat and age < 20 else None,
+                       profile=profiles.get(str(identity), {}), rejoin=bool(policy),
+                       attempts=policy["attempts"] if policy else 0,
+                       maxAttempts=policy["max_attempts"] if policy else None, nextIn=next_in)
+        return {"accounts": rows, "waiting": WAITING, "busy": BUSY, "version": update.VERSION,
+                "rejoin": len(REJOIN), "multi": MULTI, "repo": accounts.read(ASSETS / "distribution.json", {}).get("repo", "")}
 
 HISTORY = accounts.ROOT / "sk-history.json"
 SETTINGS = accounts.ROOT / "sk-settings.json"
 QUEUE_CANCEL = threading.Event()
 WAITING = 0
+PROFILES = accounts.ROOT / "sk-account-profiles.json"
+BINDINGS = {}
 
 def record(identity, event):
     with LOCK:
         entries = accounts.read(HISTORY, [])
         entries.append({"time": time.strftime("%Y-%m-%d %H:%M:%S"), "account": identity, "event": event})
         accounts.write(HISTORY, entries[-500:])
+
+def save_profiles():
+    profiles = accounts.read(PROFILES, {})
+    for identity, policy in REJOIN.items():
+        profiles[str(identity)] = {key: policy[key] for key in ("place", "delay", "max_attempts", "attempts")}
+        profiles[str(identity)]["enabled"] = True
+    accounts.write(PROFILES, profiles)
+
+
+def restore_profiles():
+    known = {a["userId"] for a in accounts.accounts()}
+    for key, config in accounts.read(PROFILES, {}).items():
+        if not str(key).isdigit() or int(key) not in known or not isinstance(config, dict):
+            continue
+        if config.get("enabled") and all(type(config.get(k)) is int and lo <= config[k] <= hi
+                for k, lo, hi in (("place", 1, 10**16-1), ("delay", 10, 3600), ("max_attempts", 1, 20))):
+            identity = int(key)
+            REJOIN[identity] = {**config, "attempts": max(0, int(config.get("attempts", 0))), "next": 0}
+            STATUS[identity] = "Monitoramento restaurado · aguardando novo heartbeat"
+
+
+def diagnostic():
+    checks = ["Windows: " + ("disponível" if os.name == "nt" else "indisponível"), MULTI]
+    try:
+        checks.append(f"Processos Roblox abertos: {len(windows.running())}")
+    except (ValueError, OSError) as error:
+        checks.append(str(error))
+    if os.name == "nt":
+        import winreg
+        try:
+            with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, r"roblox-player\shell\open\command") as key:
+                command = winreg.QueryValueEx(key, "")[0]
+            checks.append("Protocolo Roblox registrado" if command else "Protocolo Roblox vazio")
+        except OSError:
+            checks.append("Protocolo Roblox ausente. Abra um jogo pelo site oficial neste PC.")
+    checks.append("Sessões locais cadastradas: " + str(len(accounts.accounts())))
+    checks.append("Reconexão aguarda um heartbeat desta execução do app antes de monitorar cada conta.")
+    return checks
+
 
 def wait_new_pid(before):
     deadline = time.monotonic() + 50
@@ -116,11 +168,22 @@ def start_job(value, *, remember_place=True):
                     STATUS[identity] = "Abrindo"
                     WAITING -= 1
                     previous_session = LIVE.get(identity, {}).get("session")
+                binding = BINDINGS.get(identity)
+                if binding and windows.same_process(*binding):
+                    with LOCK:
+                        STATUS[identity] = "Instância anterior ainda aberta · confira antes de abrir novamente"
+                        WAITING -= 1
+                    continue
+                profile = accounts.read(PROFILES, {}).get(str(identity), {})
+                target_place = profile.get("place", place) if remember_place and value.get("use_profiles") else place
+                if type(target_place) is not int or not 0 < target_place < 10**16:
+                    raise ValueError("Destino salvo inválido. Reconfigure a conta.")
                 sent_at = time.monotonic()
                 record(row["username"], "Abertura solicitada")
                 try:
-                    accounts.launch(row["username"], place, before_open=lambda: not QUEUE_CANCEL.is_set())
+                    accounts.launch(row["username"], target_place, before_open=lambda: not QUEUE_CANCEL.is_set())
                     pid = wait_new_pid(before)
+                    BINDINGS[identity] = (pid, windows.process_stamp(pid))
                 except (ValueError, OSError) as error:
                     with LOCK:
                         STATUS[identity] = str(error)
@@ -135,10 +198,14 @@ def start_job(value, *, remember_place=True):
                 while time.monotonic() < deadline and not QUEUE_CANCEL.is_set():
                     with LOCK:
                         beat = LIVE.get(identity)
-                        confirmed = bool(beat and beat["received"] >= sent_at and beat["place"] == place and beat["session"] != previous_session)
+                        confirmed = bool(beat and beat["received"] >= sent_at and beat["place"] == target_place and beat["session"] != previous_session)
                     if confirmed:
                         break
                     QUEUE_CANCEL.wait(.5)
+                if confirmed:
+                    with LOCK:
+                        STATUS[identity] = "Online"
+                    record(row["username"], "Nova sessão confirmada pelo heartbeat")
                 if not confirmed:
                     if QUEUE_CANCEL.is_set():
                         message = "Fila cancelada"
@@ -159,6 +226,11 @@ def start_job(value, *, remember_place=True):
                 for row in targets:
                     if STATUS.get(row["userId"], "").startswith(("Na fila", "Aguardando vaga")):
                         STATUS[row["userId"]] = "Pronta"
+                if not remember_place:
+                    for row in targets:
+                        policy = REJOIN.get(row["userId"])
+                        if policy:
+                            policy["next"] = time.monotonic() + min(3600, policy["delay"] * 2 ** min(max(0, policy["attempts"] - 1), 10))
                 WAITING = 0
                 BUSY = False
     threading.Thread(target=run, daemon=True).start()
@@ -201,13 +273,21 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK:
                     if not any(a["userId"] == identity for a in accounts.accounts()):
                         return self.reply(404, {"error": "Conta não cadastrada."})
-                    if identity in REJOIN:
-                        REJOIN[identity]["attempts"] = 0
                     previous = LIVE.get(identity)
                     if not previous or time.monotonic() - previous["received"] >= 20:
                         record(str(identity), "Heartbeat recebido")
-                    LIVE[identity] = {"received": time.monotonic(), "place": place, "session": session}
+                    now = time.monotonic()
+                    continuous = previous and previous["session"] == session and now - previous["received"] < 20
+                    since = previous["since"] if continuous else now
+                    LIVE[identity] = {"received": now, "place": place, "session": session, "since": since}
+                    policy = REJOIN.get(identity)
+                    if policy and now - since >= 120 and policy["attempts"]:
+                        policy["attempts"] = 0
+                        policy["next"] = 0
+                        save_profiles()
                 return self.reply(200, {"ok": True})
+            if self.path == "/diagnostic":
+                return self.reply(200, {"checks": diagnostic()})
             if self.path == "/state":
                 return self.reply(200, public_state())
             if self.path == "/script":
@@ -245,6 +325,9 @@ class Handler(BaseHTTPRequestHandler):
                     for identity in ids:
                         for mapping in (LIVE, REJOIN, STATUS):
                             mapping.pop(identity, None)
+                        profiles = accounts.read(PROFILES, {})
+                        profiles.pop(str(identity), None)
+                        accounts.write(PROFILES, profiles)
                 return self.reply(200, {"ok": True})
             if self.path == "/rejoin":
                 ids, place = value.get("ids"), value.get("place")
@@ -253,17 +336,34 @@ class Handler(BaseHTTPRequestHandler):
                 if ids and (type(place) is not int or not 0 < place < 10**16):
                     raise ValueError("Informe um Place ID válido.")
                 delay = value.get("rejoin_delay", 20)
+                maximum = value.get("max_attempts", 3)
                 if ids and (type(delay) is not int or not 10 <= delay <= 3600):
                     raise ValueError("Informe entre 10 e 3600 segundos sem sinal.")
+                if ids and (type(maximum) is not int or not 1 <= maximum <= 20):
+                    raise ValueError("Use de 1 a 20 tentativas.")
                 known = {a["userId"] for a in accounts.accounts()}
                 with LOCK:
-                    if ids:
+                    profiles = accounts.read(PROFILES, {})
+                    if not ids:
+                        for config in profiles.values():
+                            config["enabled"] = False
+                        REJOIN.clear()
+                    else:
                         settings = accounts.read(SETTINGS, {})
-                        settings["place"] = place
-                        settings["rejoin_delay"] = delay
+                        settings.update(place=place, rejoin_delay=delay, max_attempts=maximum)
                         accounts.write(SETTINGS, settings)
-                    REJOIN.clear()
-                    REJOIN.update({i: {"place": place, "delay": delay, "attempts": 0, "next": 0} for i in ids if i in known})
+                        for identity in ids:
+                            if identity not in known:
+                                continue
+                            if value.get("disable"):
+                                REJOIN.pop(identity, None)
+                                profiles.setdefault(str(identity), {})["enabled"] = False
+                            else:
+                                REJOIN[identity] = {"place": place, "delay": delay,
+                                    "max_attempts": maximum, "attempts": 0, "next": 0}
+                                profiles[str(identity)] = {"place": place, "delay": delay,
+                                    "max_attempts": maximum, "attempts": 0, "enabled": True}
+                    accounts.write(PROFILES, profiles)
                 return self.reply(200, {"ok": True})
             if self.path == "/check":
                 info, newer = update.manifest(value.get("repo", ""))
@@ -284,25 +384,41 @@ class Handler(BaseHTTPRequestHandler):
             error = sys.exc_info()[1]
             self.reply(400, {"error": str(error) if type(error) is ValueError else "Operação indisponível. Confira a configuração e a conexão."})
 
+def watch_once():
+    with LOCK:
+        if BUSY:
+            return
+        now = time.monotonic()
+        for identity, policy in REJOIN.items():
+            beat = LIVE.get(identity)
+            if not beat or now - beat["received"] < policy["delay"] or now < policy["next"]:
+                continue
+            if policy["attempts"] >= policy["max_attempts"]:
+                STATUS[identity] = "Limite de tentativas atingido · reative para tentar novamente"
+                continue
+            binding = BINDINGS.get(identity)
+            if binding and windows.same_process(*binding):
+                STATUS[identity] = "Sem sinal · instância ainda aberta; confira o coletor"
+                continue
+            policy["attempts"] += 1
+            policy["next"] = now + min(3600, policy["delay"] * 2 ** min(policy["attempts"] - 1, 10))
+            save_profiles()
+            try:
+                record(str(identity), f"Reconexão {policy['attempts']}/{policy['max_attempts']}")
+                start_job({"ids": [identity], "place": policy["place"]}, remember_place=False)
+            except (ValueError, OSError) as error:
+                STATUS[identity] = str(error)
+                record(str(identity), str(error))
+            break
+
+
 def watch():
     while True:
         time.sleep(2)
-        with LOCK:
-            if BUSY:
-                continue
-            now = time.monotonic()
-            for identity, policy in REJOIN.items():
-                beat = LIVE.get(identity)
-                if not beat or now - beat["received"] < policy["delay"] or now < policy["next"] or policy["attempts"] >= 3:
-                    continue
-                try:
-                    record(str(identity), "Tentativa de reconexão")
-                    start_job({"ids": [identity], "place": policy["place"]}, remember_place=False)
-                except ValueError:
-                    continue
-                policy["attempts"] += 1
-                policy["next"] = now + 60
-                break
+        try:
+            watch_once()
+        except (ValueError, OSError) as error:
+            record("Monitor", str(error))
 
 def main():
     global MULTI_HANDLE, MULTI
@@ -323,6 +439,7 @@ def main():
         MULTI_HANDLE, MULTI = accounts.reserve_multi_instance()
         Thread = threading.Thread
         Thread(target=server.serve_forever, daemon=True).start()
+        restore_profiles()
         Thread(target=watch, daemon=True).start()
         desktop = Desktop(root, PORT, ADMIN, ASSETS, accounts.read(SETTINGS, {}))
         try:

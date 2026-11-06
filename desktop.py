@@ -35,12 +35,14 @@ class Desktop:
         style.configure("Treeview.Heading", background=LINE, foreground=TEXT, relief="flat")
         style.map("Treeview", background=[("selected", "#51402b")], foreground=[("selected", TEXT)])
 
+        self.compact = False
         header = tk.Frame(root, bg=BG)
         header.pack(fill="x", padx=26, pady=(22, 12))
         self.banner = tk.PhotoImage(file=assets / "artwork" / "banner.png").subsample(2, 2)
         self.portrait = tk.PhotoImage(file=assets / "artwork" / "portrait.png").subsample(4, 4)
         hero = tk.Canvas(header, bg="#000000", height=182, highlightthickness=0)
         hero.pack(fill="x")
+        self.hero = hero
         art = hero.create_image(0, 0, image=self.banner, anchor="ne")
         hero.bind("<Configure>", lambda event: hero.coords(art, event.width, 0))
         hero.create_text(22, 28, text="01   /   CONTROLE DE SESSÕES", anchor="w", fill=MINT, font=("Consolas", 10))
@@ -50,7 +52,7 @@ class Desktop:
         toolbar.pack(fill="x", pady=(8, 0))
         tk.Label(toolbar, image=self.portrait, bg=BG).pack(side="left", padx=(0, 8))
         self.toolbar = toolbar
-        for title, action in (("Nick e senha", self.password_dialog), ("Importar contas", self.import_dialog), ("Heartbeat", self.heartbeat), ("Histórico", self.history), ("FPS", self.fps_dialog), ("Atualizações", self.updates)):
+        for title, action in (("Nick e senha", self.password_dialog), ("Importar contas", self.import_dialog), ("Heartbeat", self.heartbeat), ("Histórico", self.history), ("Diagnóstico", self.diagnostic), ("Compacto", self.toggle_compact), ("FPS", self.fps_dialog), ("Atualizações", self.updates)):
             self.button(toolbar, title, action, title == "Importar contas").pack(side="left", padx=(0, 6))
         self.button(toolbar, "Encerrar", root.destroy).pack(side="right")
         
@@ -70,19 +72,30 @@ class Desktop:
         accounts_panel = tk.Frame(content, bg=PANEL, padx=12, pady=12)
         accounts_panel.pack(side="left", fill="both", expand=True, padx=(0, 12))
         self.label(accounts_panel, "Suas contas", size=14, bold=True).pack(anchor="w", pady=(0, 9))
-        self.table = ttk.Treeview(accounts_panel, columns=("account", "status", "age"), show="headings", selectmode="extended")
-        for column, name, width in (("account", "CONTA", 145), ("status", "ESTADO", 190), ("age", "ÚLTIMO SINAL", 100)):
+        self.table = ttk.Treeview(accounts_panel, columns=("account", "status", "age", "connected", "retry"), show="headings", selectmode="extended")
+        for column, name, width in (("account", "CONTA", 145), ("status", "ESTADO", 190), ("age", "ÚLTIMO SINAL", 90), ("connected", "CONECTADA", 85), ("retry", "RECONEXÃO", 110)):
             self.table.heading(column, text=name, anchor="w")
             self.table.column(column, width=width, minwidth=75)
         scrollbar = ttk.Scrollbar(accounts_panel, orient="vertical", command=self.table.yview)
         self.table.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
         self.table.pack(fill="both", expand=True)
+        self.table.bind("<<TreeviewSelect>>", self.load_profile)
         self.table.tag_configure("online", foreground=MINT)
         self.table.tag_configure("offline", foreground="#ffc693")
 
-        sidebar = tk.Frame(content, bg=PANEL, padx=15, pady=12, width=260)
-        sidebar.pack(side="right", fill="y")
+        sidebar_shell = tk.Frame(content, bg=PANEL, width=290)
+        sidebar_shell.pack(side="right", fill="y")
+        sidebar_shell.pack_propagate(False)
+        canvas = tk.Canvas(sidebar_shell, bg=PANEL, highlightthickness=0)
+        scroll = ttk.Scrollbar(sidebar_shell, orient="vertical", command=canvas.yview)
+        scroll.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        canvas.configure(yscrollcommand=scroll.set)
+        sidebar = tk.Frame(canvas, bg=PANEL, padx=15, pady=12)
+        item = canvas.create_window((0, 0), window=sidebar, anchor="nw")
+        sidebar.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(item, width=e.width))
         self.label(sidebar, "Abrir no Roblox", size=14, bold=True).pack(anchor="w")
         self.label(sidebar, "Place ID", color=MUTED).pack(anchor="w", pady=(12, 4))
         self.place = self.entry(sidebar)
@@ -92,6 +105,15 @@ class Desktop:
         self.rejoin_delay = self.entry(sidebar)
         self.rejoin_delay.insert(0, str(settings.get("rejoin_delay", 20)))
         self.rejoin_delay.pack(fill="x", ipady=3)
+        self.label(sidebar, "Máximo de tentativas", color=MUTED).pack(anchor="w", pady=(8, 0))
+        self.max_attempts = self.entry(sidebar)
+        self.max_attempts.insert(0, str(settings.get("max_attempts", 3)))
+        self.max_attempts.pack(fill="x", ipady=3)
+        self.label(sidebar, "Espera dobra entre tentativas, até 1 hora. Contagem zera após 2 minutos de sinal estável.", color=MUTED, wrap=222).pack(anchor="w", pady=5)
+        self.use_profiles = tk.BooleanVar(value=True)
+        tk.Checkbutton(sidebar, text="Usar destinos salvos por conta", variable=self.use_profiles,
+                       bg=PANEL, fg=TEXT, selectcolor=BG, activebackground=PANEL,
+                       activeforeground=TEXT).pack(anchor="w")
         self.dimensions = {}
         for key, label, default in (("limit", "Limite de instâncias", 2), ("width", "Largura (px)", 320), ("height", "Altura (px)", 240)):
             row = tk.Frame(sidebar, bg=PANEL)
@@ -102,7 +124,7 @@ class Desktop:
             entry.insert(0, settings.get(key, default))
             entry.pack(side="right", ipady=3)
             self.dimensions[key] = entry
-        for title, action in (("Abrir selecionadas", self.launch), ("Cancelar fila", lambda: self.run("/cancel", {})), ("Ativar reconexão", self.rejoin), ("Desativar reconexão", lambda: self.run("/rejoin", {"ids": []})), ("Selecionar todas", self.select_all), ("Remover selecionadas", self.remove)):
+        for title, action in (("Abrir selecionadas", self.launch), ("Cancelar fila", lambda: self.run("/cancel", {})), ("Ativar reconexão", self.rejoin), ("Pausar selecionadas", lambda: self.action("/pause")), ("Selecionar todas", self.select_all), ("Remover selecionadas", self.remove)):
             self.button(sidebar, title, action, title == "Abrir selecionadas").pack(fill="x", pady=(7, 0))
         self.rejoin_status = self.label(sidebar, "", color=MUTED, wrap=222)
         self.rejoin_status.pack(anchor="w", pady=(12, 0))
@@ -191,7 +213,10 @@ class Desktop:
             for identity in self.rows.keys() - rows.keys():
                 self.table.delete(identity)
             for identity, row in rows.items():
-                values = (row["username"], row["status"], "—" if row["age"] is None else f'{row["age"]} s')
+                values = (row["username"], row["status"], "—" if row["age"] is None else f'{row["age"]} s',
+                          '—' if row.get('connected') is None else f'{row["connected"]//60} min',
+                          ('Pausada' if not row.get('rejoin') else f'{row["attempts"]}/{row["maxAttempts"]}' +
+                           (' · limite atingido' if row['attempts'] >= row['maxAttempts'] else ' · aguardando sinal' if row.get('nextIn') is None else f' · {row["nextIn"]}s')))
                 tags = ("online",) if row["status"] == "Online" else ("offline",) if row["status"] == "Sem sinal" else ()
                 if identity in self.rows:
                     self.table.item(identity, values=values, tags=tags)
@@ -219,10 +244,13 @@ class Desktop:
         if not ids:
             self.notice.config(text="Selecione pelo menos uma conta.")
             return
-        payload = {"ids": ids, "place": place}
-        if path == "/rejoin":
+        payload = {"ids": ids, "place": place, "use_profiles": self.use_profiles.get()}
+        if path in ("/rejoin", "/pause"):
+            payload["disable"] = path == "/pause"
+            path = "/rejoin"
             try:
                 payload["rejoin_delay"] = int(self.rejoin_delay.get().strip())
+                payload["max_attempts"] = int(self.max_attempts.get().strip())
             except ValueError:
                 self.notice.config(text="Informe entre 10 e 3600 segundos sem sinal.")
                 return
@@ -233,6 +261,31 @@ class Desktop:
                 self.notice.config(text="Informe dimensões e limite em números inteiros.")
                 return
         self.run(path, payload)
+
+    def toggle_compact(self):
+        self.compact = not self.compact
+        self.hero.configure(height=0 if self.compact else 182)
+        if self.compact:
+            self.hero.pack_forget()
+        else:
+            self.hero.pack(fill="x", before=self.toolbar)
+
+    def load_profile(self, event=None):
+        ids = self.ids()
+        if len(ids) != 1:
+            return
+        row = self.rows.get(str(ids[0]), {})
+        profile = row.get("profile", {})
+        for key, field in (("place", self.place), ("delay", self.rejoin_delay), ("max_attempts", self.max_attempts)):
+            if key in profile:
+                field.delete(0, "end")
+                field.insert(0, str(profile[key]))
+
+    def diagnostic(self):
+        def show(value):
+            body = self.dialog("Diagnóstico de abertura")
+            self.label(body, "\n\n".join(value["checks"]), wrap=520).pack(anchor="w")
+        self.run("/diagnostic", {}, show)
 
     def launch(self):
         self.action("/launch")

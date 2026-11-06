@@ -74,3 +74,30 @@ def compact(pid, width, height, deadline):
                     return rect.right - rect.left, rect.bottom - rect.top
         time.sleep(.5)
     return None
+
+
+def process_stamp(pid):
+    """Creation time identifies the process even when Windows reuses its PID."""
+    kernel = c.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.argtypes, kernel.OpenProcess.restype = [w.DWORD, w.BOOL, w.DWORD], w.HANDLE
+    kernel.GetProcessTimes.argtypes = [w.HANDLE] + [c.POINTER(w.FILETIME)] * 4
+    kernel.GetProcessTimes.restype = w.BOOL
+    kernel.CloseHandle.argtypes, kernel.CloseHandle.restype = [w.HANDLE], w.BOOL
+    handle = kernel.OpenProcess(0x1000, False, pid)
+    if not handle:
+        raise ValueError("Sem acesso à identidade do processo Roblox.")
+    try:
+        times = [w.FILETIME() for _ in range(4)]
+        if not kernel.GetProcessTimes(handle, *(c.byref(t) for t in times)):
+            raise ValueError("Não foi possível identificar a criação do processo.")
+        return times[0].dwHighDateTime << 32 | times[0].dwLowDateTime
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def same_process(pid, created):
+    try:
+        return pid in running() and process_stamp(pid) == created
+    except (ValueError, OSError):
+        # Unknown permissions must not admit a duplicate instance.
+        return True
