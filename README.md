@@ -2,7 +2,9 @@
 
 Aplicativo Windows x64 para suas sessões Roblox. Baixe `RejoinDesk.exe` em Releases. O app consulta atualizações do GitHub ao iniciar, verifica tamanho e SHA-256 e reinicia quando há versão nova.
 
-## 0.7.0
+## 0.7.1
+
+A aba Config tem rolagem para acessar os controles em janelas pequenas.
 
 **Otimizar** abre Config → Desempenho e BLOCK ACC. Escolha a pasta que contém RobloxPlayerBeta.exe usada pelo WebLauncher ou deixe vazio para detectar a instalação registrada. Feche os Roblox e aplique o perfil econômico. Ele solicita texturas mínimas, MSAA 1x, qualidade de renderização 1, grama e distâncias CSG reduzidas e teto de FPS escolhido (padrão 10).
 
