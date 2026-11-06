@@ -8,7 +8,8 @@ with tempfile.TemporaryDirectory() as temp:
  import app as a
  a.accounts.accounts=lambda:[{'userId':1,'username':'test_one'},{'userId':2,'username':'test_two'}]
  a.PORT=49687
- server=a.ThreadingHTTPServer(('127.0.0.1',a.PORT),a.Handler)
+ server=a.ThreadingHTTPServer(('127.0.0.1',0),a.Handler)
+ a.PORT=server.server_port
  threading.Thread(target=server.serve_forever,daemon=True).start()
  def req(path,value,key=None):
   request=urllib.request.Request(f'http://127.0.0.1:{a.PORT}'+path,data=json.dumps(value).encode(),headers={'X-Heartbeat-Key' if path=='/heartbeat' else 'X-Rejoin-Key':key or (a.KEY if path=='/heartbeat' else a.ADMIN)})
