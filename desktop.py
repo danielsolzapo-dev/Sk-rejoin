@@ -369,7 +369,7 @@ class Desktop:
                 else:
                     self.table.insert("", "end", iid=identity, values=values, tags=tags)
             self.rows = rows
-            for label, value in zip(self.metrics, (len(rows), sum(r["status"] == "Online" for r in rows.values()), f'{state["waiting"]} na fila' if state["busy"] else "Livre")):
+            for label, value in zip(self.metrics, (len(rows), sum(r["age"] is not None and r["age"] < 20 for r in rows.values()), f'{state["waiting"]} na fila' if state["busy"] else "Livre")):
                 label.config(text=value)
             self.config_multi.config(text=state["multi"])
             self.rejoin_status.config(text=f'{state["rejoin"]} conta(s) com reconexão ativa\n{state["multi"]}\nVersão {state["version"]}')

@@ -8,7 +8,7 @@ import subprocess
 import sys
 from urllib.request import urlopen
 
-VERSION = "0.7.1"
+VERSION = "0.7.2"
 LIMIT = 100 * 1024 * 1024
 
 def version(value):

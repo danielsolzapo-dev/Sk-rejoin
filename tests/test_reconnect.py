@@ -1,6 +1,6 @@
 import os,sys,tempfile,time,threading,json,urllib.request
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 root=Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory() as temp:
  os.environ['LOCALAPPDATA']=temp
@@ -49,6 +49,25 @@ with tempfile.TemporaryDirectory() as temp:
   assert a.public_state()['accounts'][1]['nextIn'] is None
   assert req('/diagnostic',{})['checks']
   assert not req('/bootstrapper',{'action':'state'})['installed']
+  from desktop import Desktop
+  dashboard = Desktop.__new__(Desktop)
+  for name in ('root', 'notice', 'table', 'config_multi', 'rejoin_status'):
+   setattr(dashboard, name, MagicMock())
+  dashboard.metrics = [MagicMock() for _ in range(3)]
+  dashboard.rows = {}
+  dashboard.economy = False
+  snapshot = a.public_state()
+  def row(identity, age, status):
+   return {'userId': identity, 'username': 'fixture_' + str(identity), 'age': age,
+           'status': status, 'connected': None, 'rejoin': False}
+  snapshot['accounts'] = [row(1, 1, 'BLOCK ACC: servidor não confirmado'),
+                          row(2, 3, 'Online'), row(3, 20, 'Online'),
+                          row(4, None, 'Pronta'), row(5, 25, 'BLOCK ACC')]
+  dashboard.refresh_done(snapshot, None)
+  assert dashboard.metrics[1].config.call_args.kwargs['text'] == 2
+  snapshot['accounts'][0]['age'] = 20
+  dashboard.refresh_done(snapshot, None)
+  assert dashboard.metrics[1].config.call_args.kwargs['text'] == 1
   if os.name == 'nt':
    import tkinter as tk
    from desktop import Desktop
