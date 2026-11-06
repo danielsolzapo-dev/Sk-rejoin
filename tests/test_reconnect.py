@@ -48,6 +48,7 @@ with tempfile.TemporaryDirectory() as temp:
   assert 1 not in a.REJOIN and 2 in a.REJOIN
   assert a.public_state()['accounts'][1]['nextIn'] is None
   assert req('/diagnostic',{})['checks']
+  assert not req('/bootstrapper',{'action':'state'})['installed']
   if os.name == 'nt':
    import tkinter as tk
    from desktop import Desktop
@@ -56,6 +57,11 @@ with tempfile.TemporaryDirectory() as temp:
    try:
     with patch.object(Desktop, 'refresh'), patch.object(Desktop, 'check_startup_update'):
      desktop = Desktop(window, a.PORT, a.ADMIN, root, {})
+     assert len(desktop.tabs.tabs()) == 2
+     assert desktop.tabs.tab(1, "text") == "Config"
+     desktop.tabs.select(1)
+     window.update_idletasks()
+     desktop.tabs.select(0)
      desktop.toggle_compact()
      desktop.toggle_compact()
      window.update_idletasks()

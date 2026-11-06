@@ -7,7 +7,7 @@ import accounts
 from queue import Empty, Queue
 from threading import Event, Thread
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, filedialog
 from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
 
@@ -56,7 +56,17 @@ class Desktop:
             self.button(toolbar, title, action, title == "Importar contas").pack(side="left", padx=(0, 6))
         self.button(toolbar, "Encerrar", root.destroy).pack(side="right")
         
-        metrics = tk.Frame(root, bg=BG)
+        self.tabs = ttk.Notebook(root)
+        self.tabs.pack(fill="both", expand=True, padx=12)
+        sessions = tk.Frame(self.tabs, bg=BG)
+        config = tk.Frame(self.tabs, bg=BG)
+        self.tabs.add(sessions, text="Contas")
+        self.tabs.add(config, text="Config")
+        style.configure("TNotebook", background=BG, borderwidth=0)
+        style.configure("TNotebook.Tab", padding=(20, 8), background=LINE, foreground=TEXT)
+        style.map("TNotebook.Tab", background=[("selected", "#51402b")])
+        self.build_config(config)
+        metrics = tk.Frame(sessions, bg=BG)
         metrics.pack(fill="x", padx=26, pady=(0, 14))
         self.metrics = []
         for title in ("Contas salvas", "Heartbeat ativo", "Fila de abertura"):
@@ -67,7 +77,7 @@ class Desktop:
             value.pack(anchor="w")
             self.metrics.append(value)
 
-        content = tk.Frame(root, bg=BG)
+        content = tk.Frame(sessions, bg=BG)
         content.pack(fill="both", expand=True, padx=26)
         accounts_panel = tk.Frame(content, bg=PANEL, padx=12, pady=12)
         accounts_panel.pack(side="left", fill="both", expand=True, padx=(0, 12))
@@ -136,6 +146,50 @@ class Desktop:
         if repo:
             self.check_startup_update(repo)
 
+    def build_config(self, parent):
+        box = tk.Frame(parent, bg=PANEL, padx=20, pady=18)
+        box.pack(fill="x", padx=22, pady=15)
+        self.label(box, "Multi Roblox", size=16, bold=True).pack(anchor="w")
+        self.config_multi = self.label(box, "Conferindo modo de abertura…", color=MINT, wrap=850)
+        self.config_multi.pack(anchor="w", pady=8)
+        self.label(box, "O limite escolhido na aba Contas vale também com launchers externos. "
+                   "Um novo processo é conferido após cada abertura.", color=MUTED, wrap=850).pack(anchor="w")
+        tools = tk.Frame(parent, bg=PANEL, padx=20, pady=18)
+        tools.pack(fill="x", padx=22, pady=(0, 15))
+        self.label(tools, "Downgrade / WebLauncher", size=16, bold=True).pack(anchor="w")
+        self.label(tools, "Baixe ou escolha o WebLauncher. Abra a ferramenta para selecionar e aplicar "
+                   "a versão do Roblox. Feche os jogos antes de trocar de versão.", color=MUTED, wrap=850).pack(anchor="w", pady=8)
+        self.label(tools, "Fonte · github.com/vnnaworks/weblauncher", color=MUTED).pack(anchor="w")
+        self.bootstrap_status = self.label(tools, "Clique Conferir para localizar a versão publicada.", wrap=850)
+        self.bootstrap_status.pack(anchor="w", pady=8)
+        actions = tk.Frame(tools, bg=PANEL)
+        actions.pack(fill="x")
+        for title, action in (("Conferir", "check"), ("Baixar WebLauncher", "download"), ("Abrir WebLauncher", "open")):
+            self.button(actions, title, lambda a=action: self.bootstrap_action(a), action == "open").pack(side="left", padx=(0, 8))
+        self.button(actions, "Escolher existente", self.choose_bootstrapper).pack(side="left")
+        self.label(tools, "Depois de configurar, o SK Rejoin abre os jogos pelo launcher associado "
+                   "ao protocolo Roblox no Windows.", color=MUTED, wrap=850).pack(anchor="w", pady=(10, 0))
+
+    def bootstrap_action(self, action, path=None):
+        def done(value):
+            available = value.get("available")
+            text = "WebLauncher " + value.get("version", "") if value.get("installed") else "WebLauncher ainda não escolhido."
+            if available:
+                text += " · Disponível " + available["version"]
+            if value.get("path"):
+                text += "\n" + value["path"]
+            if action == "download":
+                text += "\nDownload verificado com SHA-256. Clique Abrir WebLauncher."
+            elif action == "open":
+                text += "\nAbertura solicitada. Escolha a versão na ferramenta."
+            self.bootstrap_status.config(text=text)
+        self.run("/bootstrapper", {"action": action, "path": path}, done)
+
+    def choose_bootstrapper(self):
+        path = filedialog.askopenfilename(parent=self.root, title="Escolher WebLauncher", filetypes=[("Executável Windows", "*.exe")])
+        if path:
+            self.bootstrap_action("select", path)
+
     def label(self, parent, text, size=10, color=TEXT, bold=False, wrap=0):
         return tk.Label(parent, text=text, bg=parent.cget("bg"), fg=color, anchor="w",
                         justify="left", wraplength=wrap, font=("Segoe UI", size, "bold" if bold else "normal"))
@@ -162,7 +216,7 @@ class Desktop:
         request = Request(f"http://127.0.0.1:{self.port}{path}", data=json.dumps(data).encode(),
                           headers={"Content-Type": "application/json", "X-Rejoin-Key": self.key})
         try:
-            with build_opener(ProxyHandler({})).open(request, timeout=1600 if path in ("/import", "/install") else 45) as response:
+            with build_opener(ProxyHandler({})).open(request, timeout=1600 if path in ("/import", "/install", "/bootstrapper") else 45) as response:
                 return json.load(response)
         except HTTPError as error:
             raise ValueError(json.load(error)["error"]) from None
@@ -225,6 +279,7 @@ class Desktop:
             self.rows = rows
             for label, value in zip(self.metrics, (len(rows), sum(r["status"] == "Online" for r in rows.values()), f'{state["waiting"]} na fila' if state["busy"] else "Livre")):
                 label.config(text=value)
+            self.config_multi.config(text=state["multi"])
             self.rejoin_status.config(text=f'{state["rejoin"]} conta(s) com reconexão ativa\n{state["multi"]}\nVersão {state["version"]}')
         self.root.after(2000, self.refresh)
 

@@ -11,6 +11,7 @@ import time
 import accounts
 import update
 import windows
+import bootstrapper
 
 ASSETS = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
 KEY = accounts.read(accounts.ROOT / "heartbeat-key.json", None) or secrets.token_urlsafe(32)
@@ -24,6 +25,15 @@ REJOIN = {}
 PORT = 49327
 MULTI = "Preparando modo de instâncias."
 MULTI_HANDLE = None
+MULTI_OBSERVED = False
+
+def multi_status():
+    if MULTI_OBSERVED:
+        return "Múltiplos processos Roblox observados nesta execução. Confira cada conta pelo heartbeat."
+    if not MULTI_HANDLE:
+        return "Reserva interna indisponível. Tentativas permitidas com launcher externo, até o limite configurado."
+    return MULTI
+
 
 def public_state():
     now = time.monotonic()
@@ -50,7 +60,7 @@ def public_state():
                        attempts=policy["attempts"] if policy else 0,
                        maxAttempts=policy["max_attempts"] if policy else None, nextIn=next_in)
         return {"accounts": rows, "waiting": WAITING, "busy": BUSY, "version": update.VERSION,
-                "rejoin": len(REJOIN), "multi": MULTI, "repo": accounts.read(ASSETS / "distribution.json", {}).get("repo", "")}
+                "rejoin": len(REJOIN), "multi": multi_status(), "repo": accounts.read(ASSETS / "distribution.json", {}).get("repo", "")}
 
 HISTORY = accounts.ROOT / "sk-history.json"
 SETTINGS = accounts.ROOT / "sk-settings.json"
@@ -137,17 +147,17 @@ def start_job(value, *, remember_place=True):
         targets = [rows[i] for i in dict.fromkeys(ids) if i in rows]
         if not targets:
             raise ValueError("Selecione contas cadastradas.")
-        if not MULTI_HANDLE and len(targets) > 1:
-            raise ValueError(MULTI)
         if remember_place:
             settings["place"] = place
         accounts.write(SETTINGS, settings)
+        if not MULTI_HANDLE:
+            record("Multi Roblox", "Reserva interna indisponível. Tentando a abertura com o launcher registrado no Windows.")
         QUEUE_CANCEL.clear()
         BUSY = True
         WAITING = len(targets)
 
     def run():
-        global BUSY, WAITING
+        global BUSY, WAITING, MULTI_OBSERVED
         try:
             for row in targets:
                 identity = row["userId"]
@@ -155,10 +165,10 @@ def start_job(value, *, remember_place=True):
                     break
                 with LOCK:
                     STATUS[identity] = "Na fila"
-                limit = settings["limit"] if MULTI_HANDLE else 1
+                limit = settings["limit"]
                 while len(windows.running()) >= limit:
                     with LOCK:
-                        STATUS[identity] = f"Aguardando vaga ({limit} instâncias permitidas)"
+                        STATUS[identity] = f"Limite configurado atingido ({limit} instâncias)"
                     if QUEUE_CANCEL.wait(1):
                         return
                 before = windows.running()
@@ -172,7 +182,6 @@ def start_job(value, *, remember_place=True):
                 if binding and windows.same_process(*binding):
                     with LOCK:
                         STATUS[identity] = "Instância anterior ainda aberta · confira antes de abrir novamente"
-                        WAITING -= 1
                     continue
                 profile = accounts.read(PROFILES, {}).get(str(identity), {})
                 target_place = profile.get("place", place) if remember_place and value.get("use_profiles") else place
@@ -184,6 +193,16 @@ def start_job(value, *, remember_place=True):
                     accounts.launch(row["username"], target_place, before_open=lambda: not QUEUE_CANCEL.is_set())
                     pid = wait_new_pid(before)
                     BINDINGS[identity] = (pid, windows.process_stamp(pid))
+                    if before:
+                        for _ in range(3):
+                            if QUEUE_CANCEL.wait(1):
+                                break
+                        current = windows.running()
+                        if pid in current and before.intersection(current):
+                            MULTI_OBSERVED = True
+                            record(row["username"], "Novo processo e instância anterior presentes · multi observado")
+                        else:
+                            record(row["username"], "Abertura enviada; múltiplas instâncias não confirmadas")
                 except (ValueError, OSError) as error:
                     with LOCK:
                         STATUS[identity] = str(error)
@@ -224,7 +243,7 @@ def start_job(value, *, remember_place=True):
         finally:
             with LOCK:
                 for row in targets:
-                    if STATUS.get(row["userId"], "").startswith(("Na fila", "Aguardando vaga")):
+                    if STATUS.get(row["userId"], "").startswith(("Na fila", "Limite configurado")):
                         STATUS[row["userId"]] = "Pronta"
                 if not remember_place:
                     for row in targets:
@@ -286,6 +305,23 @@ class Handler(BaseHTTPRequestHandler):
                         policy["next"] = 0
                         save_profiles()
                 return self.reply(200, {"ok": True})
+            if self.path == "/bootstrapper":
+                action = value.get("action", "state")
+                if action == "state":
+                    result = bootstrapper.state()
+                elif action == "check":
+                    result = {**bootstrapper.state(), "available": bootstrapper.release()}
+                elif action == "download":
+                    result = bootstrapper.download()
+                elif action == "select":
+                    result = bootstrapper.select(value.get("path"))
+                elif action == "open":
+                    if BUSY:
+                        raise ValueError("Cancele a fila de abertura antes de abrir o WebLauncher.")
+                    result = bootstrapper.open_tool()
+                else:
+                    raise ValueError("Ação do WebLauncher inválida.")
+                return self.reply(200, result)
             if self.path == "/diagnostic":
                 return self.reply(200, {"checks": diagnostic()})
             if self.path == "/state":
