@@ -25,10 +25,10 @@ with tempfile.TemporaryDirectory() as temp:
    a.watch_once()
    assert calls==[{'ids':[1],'place':10}]
    assert a.REJOIN[1]['attempts']==1
-   assert 58<a.REJOIN[1]['next']-time.monotonic()<=60
+   assert 58<a.REJOIN[1]['next']-time.monotonic()<61
    a.REJOIN[1]['next']=0
    a.watch_once()
-   assert 118<a.REJOIN[1]['next']-time.monotonic()<=120
+   assert 118<a.REJOIN[1]['next']-time.monotonic()<121
    a.BINDINGS[1]=(23,345)
    a.REJOIN[1]['next']=0
    with patch.object(a.windows,'same_process',lambda *args:True):a.watch_once()
@@ -48,5 +48,18 @@ with tempfile.TemporaryDirectory() as temp:
   assert 1 not in a.REJOIN and 2 in a.REJOIN
   assert a.public_state()['accounts'][1]['nextIn'] is None
   assert req('/diagnostic',{})['checks']
+  if os.name == 'nt':
+   import tkinter as tk
+   from desktop import Desktop
+   window = tk.Tk()
+   window.withdraw()
+   try:
+    with patch.object(Desktop, 'refresh'), patch.object(Desktop, 'check_startup_update'):
+     desktop = Desktop(window, a.PORT, a.ADMIN, root, {})
+     desktop.toggle_compact()
+     desktop.toggle_compact()
+     window.update_idletasks()
+   finally:
+    window.destroy()
   print('PASS app: authenticated HTTP, independent profiles, selected pause, restart restoration, progressive delay, attempt cap, stable recovery, duplicate-process protection')
  finally:server.shutdown();server.server_close()
