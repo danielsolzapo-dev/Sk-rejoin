@@ -136,14 +136,14 @@ def active_jobs(identity, place):
     return occupied
 
 
-def choose_server(identity, place):
+def choose_server(identity, place, excluded=()):
     with LOCK:
         active_jobs(identity, place)
     options = server_picker.candidates(place)
     with LOCK:
         occupied = active_jobs(identity, place)
         for job in options:
-            if job not in occupied:
+            if job not in occupied and job not in excluded:
                 SERVER_TARGETS[identity] = {"place": place, "jobId": job, "expires": time.monotonic() + 180}
                 return job
     raise ValueError("BLOCK ACC: nenhum servidor diferente disponível na consulta. Tente novamente depois.")
@@ -175,10 +175,14 @@ def collision_action(identity):
             if STATUS.get(identity, "").startswith("BLOCK ACC"):
                 STATUS[identity] = "Online"
             return {}
+        if not beat.get("readyForBlock") or time.monotonic() - beat.get("joined", beat["since"]) < 10:
+            STATUS[identity] = "BLOCK ACC · aguardando jogo carregado e 10 s de conexão"
+            return {}
         place = beat["place"]
+        failed = beat.get("failedJobId", "")
         STATUS[identity] = "BLOCK ACC · procurando outro servidor"
     try:
-        job = choose_server(identity, place)
+        job = choose_server(identity, place, excluded={failed} if failed else ())
         with LOCK:
             if not block_enabled():
                 SERVER_TARGETS.pop(identity, None)
@@ -187,8 +191,8 @@ def collision_action(identity):
         return {"relocate": {"placeId": place, "jobId": job}}
     except (ValueError, OSError):
         with LOCK:
-            STATUS[identity] = "BLOCK ACC · colisão sem destino disponível; confira a conta"
-        return {"stop": "BLOCK ACC: outro cliente gerenciado já está neste servidor. Aguarde um destino disponível no app."}
+            STATUS[identity] = "BLOCK ACC · aguardando outro servidor para rejoin"
+        return {"retry": True}
 
 
 def wait_new_pid(before):
@@ -378,6 +382,9 @@ class Handler(BaseHTTPRequestHandler):
                 job = value.get("jobId", "")
                 if not isinstance(job, str) or (job and not server_picker.JOB.fullmatch(job)):
                     raise ValueError("Identificador de servidor inválido.")
+                failed_job = value.get("failedJobId", "")
+                if not isinstance(failed_job, str) or (failed_job and not server_picker.JOB.fullmatch(failed_job)):
+                    raise ValueError("Identificador de servidor inválido.")
                 with LOCK:
                     if not any(a["userId"] == identity for a in accounts.accounts()):
                         return self.reply(404, {"error": "Conta não cadastrada."})
@@ -388,6 +395,7 @@ class Handler(BaseHTTPRequestHandler):
                     continuous = previous and previous["session"] == session and now - previous["received"] < 20
                     since = previous["since"] if continuous else now
                     LIVE[identity] = {"received": now, "place": place, "session": session, "since": since, "jobId": job,
+                                      "readyForBlock": value.get("readyForBlock") is True, "failedJobId": failed_job,
                                       "joined": previous.get("joined", now) if previous and previous.get("jobId") == job and previous["session"] == session else now}
                     policy = REJOIN.get(identity)
                     if policy and now - since >= 120 and policy["attempts"]:

@@ -7,44 +7,65 @@ local send = request or http_request or (syn and syn.request)
 assert(player and send, "Rejoin Desk: ambiente sem HTTP local ou jogador indisponível")
 local env = getgenv and getgenv() or _G
 local teleport = game:GetService("TeleportService")
-local lastMove = -math.huge
-local moving = false
 local session = http:GenerateGUID(false)
 env.RejoinDeskHeartbeat = session
+local readySince = nil
+local nextMove = 0
+local moving = false
+local moveStarted = 0
+local targetJob = ""
+local failedJob = ""
+local attempts = 0
+
+local function moveFailed()
+    failedJob = targetJob
+    moving = false
+    nextMove = os.clock() + (attempts >= 3 and 60 or 15)
+    if attempts >= 3 then attempts = 0 end
+    warn("SK Rejoin • BLOCK ACC: rejoin falhou; nova tentativa após a espera.")
+end
+
 local teleportFailure = teleport.TeleportInitFailed:Connect(function(who)
     if who == player and moving and env.RejoinDeskHeartbeat == session then
-        env.RejoinDeskHeartbeat = nil
-        player:Kick("SK Rejoin • BLOCK ACC: a troca de servidor falhou. Confira a conta no app.")
+        moveFailed()
     end
 end)
 task.spawn(function()
     while env.RejoinDeskHeartbeat == session do
+        local now = os.clock()
+        local character = player.Character
+        local loaded = game:IsLoaded() and character and character:FindFirstChild("HumanoidRootPart")
+        if loaded then
+            readySince = readySince or now
+        else
+            readySince = nil
+        end
+        local ready = readySince ~= nil and now - readySince >= 10
+        if moving and now - moveStarted >= 30 then moveFailed() end
         local ok, response = pcall(send, {
             Url = url, Method = "POST",
             Headers = {["Content-Type"] = "application/json", ["X-Heartbeat-Key"] = key},
-            Body = http:JSONEncode({userId = player.UserId, placeId = game.PlaceId, jobId = game.JobId, session = session})
+            Body = http:JSONEncode({
+                userId = player.UserId, placeId = game.PlaceId, jobId = game.JobId,
+                session = session, readyForBlock = ready, failedJobId = failedJob
+            })
         })
         if ok and response and response.StatusCode == 200 and env.RejoinDeskHeartbeat == session then
             local parsed, data = pcall(http.JSONDecode, http, response.Body)
             if parsed and type(data) == "table" then
-                if type(data.stop) == "string" then
-                    env.RejoinDeskHeartbeat = nil
-                    player:Kick(data.stop)
-                    break
-                end
                 local move = data.relocate
-                if type(move) == "table" and move.placeId == game.PlaceId and type(move.jobId) == "string"
-                    and move.jobId ~= game.JobId and os.clock() - lastMove >= 15 then
-                    lastMove = os.clock()
+                if ready and not moving and os.clock() >= nextMove and type(move) == "table"
+                    and move.placeId == game.PlaceId and type(move.jobId) == "string"
+                    and move.jobId ~= game.JobId then
+                    targetJob = move.jobId
+                    attempts = attempts + 1
                     moving = true
+                    moveStarted = os.clock()
+                    nextMove = moveStarted + 15
                     local moved = pcall(function()
                         teleport:TeleportToPlaceInstance(move.placeId, move.jobId, player)
                     end)
-                    if not moved then
-                        env.RejoinDeskHeartbeat = nil
-                        player:Kick("SK Rejoin • BLOCK ACC: não foi possível trocar de servidor.")
-                        break
-                    end
+                    if not moved then moveFailed() end
                 end
             end
         end

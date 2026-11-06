@@ -60,7 +60,10 @@ with tempfile.TemporaryDirectory() as temporary:
             return json.load(response)
 
     def beat(identity, job):
-        return request('/heartbeat', {'userId': identity, 'placeId': 10, 'jobId': job, 'session': 's' + str(identity)})
+        value = {'userId': identity, 'placeId': 10, 'jobId': job, 'session': 's' + str(identity), 'readyForBlock': True}
+        request('/heartbeat', value)
+        app.LIVE[identity]['joined'] -= 11
+        return request('/heartbeat', value)
 
     try:
         assert request('/block-acc', {'enabled': True})['enabled']
@@ -74,12 +77,19 @@ with tempfile.TemporaryDirectory() as temporary:
         beat(1, 'server-A')
         with patch.object(picker, 'candidates', lambda place: ['server-A', 'server-B', 'server-C']):
             assert app.choose_server(2, 10) == 'server-B'
-            reply = beat(2, 'server-A')
+            value = {'userId': 2, 'placeId': 10, 'jobId': 'server-A', 'session': 's2', 'readyForBlock': True}
+            assert 'relocate' not in request('/heartbeat', value), 'Wait at least 10 seconds'
+            app.LIVE[2]['joined'] -= 11
+            assert 'relocate' not in request('/heartbeat', {**value, 'readyForBlock': False}), 'Wait for loaded character'
+            reply = request('/heartbeat', value)
             assert reply['relocate']['jobId'] == 'server-B'
             assert 'relocate' not in beat(1, 'server-A'), 'First account must retain its server'
             beat(2, 'server-B')
             assert app.choose_server(3, 10) == 'server-C'
             assert app.public_state()['accounts'][1]['jobId'] == 'server-B'
+        with patch.object(picker, 'candidates', lambda place: ['server-A', 'server-B', 'server-C', 'server-D']):
+            app.SERVER_TARGETS.clear()
+            assert app.choose_server(3, 10, excluded={'server-C'}) == 'server-D', 'Avoid last failed destination'
         from concurrent.futures import ThreadPoolExecutor
         app.SERVER_TARGETS.clear()
         with patch.object(picker, 'candidates', lambda place: ['server-A', 'server-B', 'server-C', 'server-D']):
@@ -87,7 +97,8 @@ with tempfile.TemporaryDirectory() as temporary:
                 jobs = list(pool.map(lambda i: app.choose_server(i, 10), (3, 4)))
             assert set(jobs) == {'server-C', 'server-D'}, 'Concurrent requests must not reserve the same job'
         with patch.object(picker, 'candidates', lambda place: ['server-A']):
-            assert 'stop' in beat(2, 'server-A')
+            reply = beat(2, 'server-A')
+            assert reply.get('retry') is True and 'stop' not in reply, 'Retry without kick when no server is available'
         assert app.public_state()['accounts'][1]['status'].startswith('BLOCK ACC')
         assert not request('/block-acc', {'enabled': False})['enabled']
         assert not app.SERVER_TARGETS
@@ -100,7 +111,7 @@ with tempfile.TemporaryDirectory() as temporary:
         fixture = {'data': [{'id': 'server-Z', 'playing': 1, 'maxPlayers': 5}, {'id': 'full', 'playing': 5, 'maxPlayers': 5}], 'nextPageCursor': 'unused'}
         with patch.object(picker, 'urlopen', lambda *args, **kwargs: io.BytesIO(json.dumps(fixture).encode())):
             assert picker.candidates(100) == ['server-Z']
-        print('PASS: selective flag backup/restore, repeat apply, failure preservation, authenticated optimization, BLOCK ACC reservations, old heartbeat rejection, collision relocation, fail-closed disconnect and disable cleanup')
+        print('PASS: selective flag backup/restore, repeat apply, failure preservation, authenticated optimization, BLOCK ACC reservations, old heartbeat rejection, collision relocation, delayed loaded rejoin without kick and disable cleanup')
     finally:
         server.shutdown()
         server.server_close()
