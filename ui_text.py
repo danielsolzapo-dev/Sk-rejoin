@@ -12,7 +12,7 @@ CATALOG.update({
 'ref_stage':'ETAPA OBSERVADA', 'ref_recent':'DESTINOS RECENTES', 'ref_no_recent':'Nenhum destino usado',
 'ref_stage_heartbeat':'◌ Aguardando heartbeat', 'ref_stage_protocol':'◌ Protocolo / launcher',
 'ref_stage_ticket':'◌ Ticket', 'ref_stage_session':'◌ Sessão', 'ref_stage_unknown':'○ Etapa não informada',
-'ref_select_account':'Selecione uma conta para acompanhar a abertura.'
+'ref_select_account':'Selecione uma conta.'
 })
 
 CATALOG.update({'ref_stage_confirmed':'✓ Heartbeat recebido', 'ref_error_code':'Erro {code} · {text}', 'ref_last_check':'Última verificação: {time}'})
