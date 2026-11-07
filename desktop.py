@@ -11,7 +11,7 @@ from tkinter import messagebox, ttk, filedialog
 from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
 
-BG, PANEL, LINE, TEXT, MUTED, MINT = "#101218", "#191d26", "#2a303c", "#f2f3f7", "#9aa3b4", "#e4c28b"
+BG, PANEL, LINE, TEXT, MUTED, MINT = "#242424", "#2d2d2d", "#505050", "#eeeeee", "#bcbcbc", "#82b5f2"
 
 
 class Desktop:
@@ -26,176 +26,163 @@ class Desktop:
         root.title("SK Rejoin")
         if (assets / "artwork" / "sk.ico").exists():
             root.iconbitmap(str(assets / "artwork" / "sk.ico"))
-        width, height = min(1320, root.winfo_screenwidth()-60), min(850, root.winfo_screenheight()-80)
+        width, height = min(1080, root.winfo_screenwidth()-40), min(680, root.winfo_screenheight()-80)
         root.geometry(f"{width}x{height}+20+20")
-        root.minsize(980, 620)
+        root.minsize(840, 500)
         root.configure(bg=BG)
-        root.option_add("*Font", ("Segoe UI", 10))
+        root.option_add("*Font", ("Segoe UI", 9))
         style = ttk.Style(root)
         style.theme_use("clam")
         style.configure("Treeview", background=PANEL, fieldbackground=PANEL, foreground=TEXT,
-                        rowheight=48, borderwidth=0, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE, font=("Segoe UI", 10))
-        style.configure("Treeview.Heading", background="#202530", foreground=MUTED, relief="flat",
-                        padding=(10, 12), font=("Segoe UI", 9, "bold"))
-        style.map("Treeview", background=[("selected", "#3c3540")], foreground=[("selected", TEXT)])
-        style.configure("TNotebook", background=BG, borderwidth=0, bordercolor=BG, lightcolor=BG, darkcolor=BG)
-        style.configure("Workspace.TNotebook", background=BG, borderwidth=0, bordercolor=BG, lightcolor=BG, darkcolor=BG)
-        style.configure("TNotebook.Tab", padding=(22, 12), background=BG, foreground=MUTED)
-        style.map("TNotebook.Tab", background=[("selected", PANEL)], foreground=[("selected", MINT)])
-        style.layout("Workspace.TNotebook.Tab", [])
-        style.configure("TCombobox", fieldbackground="#10151e", background=LINE, foreground=TEXT,
-                        arrowcolor=MINT, padding=7, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
-        style.map("TCombobox", fieldbackground=[("readonly", "#10151e")], foreground=[("readonly", TEXT)])
-        style.configure("Vertical.TScrollbar", background=LINE, troughcolor=BG, borderwidth=0, arrowsize=12, lightcolor=LINE, darkcolor=LINE, bordercolor=LINE)
-        style.configure("Horizontal.TScrollbar", background=LINE, troughcolor=BG, borderwidth=0, arrowsize=12, lightcolor=LINE, darkcolor=LINE, bordercolor=LINE)
+                        rowheight=26, borderwidth=1, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE,
+                        font=("Segoe UI", 9))
+        style.configure("Treeview.Heading", background="#383838", foreground=TEXT, relief="raised",
+                        padding=(6, 5), font=("Segoe UI", 9))
+        style.map("Treeview", background=[("selected", "#3b587b")], foreground=[("selected", "#ffffff")])
+        style.configure("TNotebook", background=BG, borderwidth=0, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
+        style.configure("Workspace.TNotebook", background=BG, borderwidth=0, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
+        style.configure("TNotebook.Tab", background="#303030", foreground=TEXT, padding=(15, 5))
+        style.map("TNotebook.Tab", background=[("selected", "#464646")], foreground=[("selected", TEXT)])
+        style.configure("TCombobox", background=LINE, fieldbackground="#202020", foreground=TEXT, arrowcolor=TEXT,
+                        bordercolor=LINE, lightcolor=LINE, darkcolor=LINE, padding=3)
+        style.map("TCombobox", fieldbackground=[("readonly", "#202020")], foreground=[("readonly", TEXT)])
+        for direction in ("Vertical", "Horizontal"):
+            style.configure(direction+".TScrollbar", background="#454545", troughcolor=BG, bordercolor=LINE,
+                            lightcolor=LINE, darkcolor=LINE, arrowsize=13, borderwidth=0)
 
-        shell = tk.Frame(root, bg=BG)
-        shell.pack(fill="both", expand=True)
-        rail = tk.Frame(shell, bg="#0c0e14", width=184, padx=14, pady=22)
-        rail.pack(side="left", fill="y")
-        rail.pack_propagate(False)
-        self.rail = rail
-        self.portrait = tk.PhotoImage(file=assets / "artwork" / "portrait.png").subsample(4, 4)
-        brand = tk.Frame(rail, bg=rail.cget("bg"))
-        brand.pack(fill="x", pady=(0, 7))
-        tk.Label(brand, image=self.portrait, bg=rail.cget("bg")).pack(side="left", padx=(0, 10))
-        self.label(brand, "SK", size=23, bold=True).pack(side="left")
-        self.label(rail, "REJOIN / DESKTOP", size=8, color=MINT).pack(anchor="w", pady=(0, 30))
-        self.label(rail, "WORKSPACE", size=8, color=MUTED).pack(anchor="w", pady=(0, 10))
-        self.nav_buttons = []
-        for index, title in enumerate(("Contas", "Configurações")):
-            button = self.button(rail, title, lambda i=index: self.tabs.select(i))
-            button.pack(fill="x", pady=3)
-            self.nav_buttons.append(button)
-        self.label(rail, "FERRAMENTAS", size=8, color=MUTED).pack(anchor="w", pady=(26, 10))
-        for title, action in (("Heartbeat", self.heartbeat), ("Histórico", self.history),
-                              ("Diagnóstico", self.diagnostic), ("Otimizar", self.show_optimization),
-                              ("Limite de FPS", self.fps_dialog), ("Atualizações", self.updates)):
-            self.button(rail, title, action).pack(fill="x", pady=3)
-        self.label(rail, "LOCAL • WINDOWS", size=8, color=MUTED).pack(side="bottom", anchor="w", pady=(14, 0))
-        self.button(rail, "Encerrar aplicativo", root.destroy).pack(side="bottom", fill="x")
-        workspace = tk.Frame(shell, bg=BG)
-        workspace.pack(side="left", fill="both", expand=True)
-        self.workspace = workspace
-        self.compact = False
-        header = tk.Frame(workspace, bg=BG)
-        header.pack(fill="x", padx=24, pady=(18, 16))
-        self.banner = tk.PhotoImage(file=assets / "artwork" / "banner.png").subsample(3, 3)
-        hero = tk.Canvas(header, bg="#000000", height=136, highlightthickness=1, highlightbackground=LINE)
-        hero.pack(fill="x")
-        self.hero = hero
-        art = hero.create_image(0, 0, image=self.banner, anchor="ne")
-        hero.bind("<Configure>", lambda event: hero.coords(art, event.width, 0))
-        hero.create_text(22, 25, text="SESSION CONTROL  /  SK REJOIN", anchor="w", fill=MINT, font=("Consolas", 9))
-        hero.create_text(20, 65, text="Sua operação. Em controle.", anchor="w", fill=TEXT, font=("Segoe UI", 25, "bold"))
-        hero.create_text(23, 106, text="Contas, conexões e reconexão em um só lugar.", anchor="w", fill=MUTED, font=("Segoe UI", 10))
-        toolbar = tk.Frame(header, bg=BG)
-        toolbar.pack(fill="x", pady=(12, 0))
-        self.toolbar = toolbar
-        self.label(toolbar, "Central de sessões", size=14, bold=True).pack(side="left")
-        for title, action, primary in (("Importar contas", self.import_dialog, True), ("Nick e senha", self.password_dialog, False),
-                                       ("Compacto", self.toggle_compact, False)):
-            self.button(toolbar, title, action, primary).pack(side="right", padx=(7, 0))
+        self.compact = True
+        self.workspace = workspace = tk.Frame(root, bg=BG)
+        workspace.pack(fill="both", expand=True, padx=8, pady=6)
+        menubar = tk.Menu(root, tearoff=False, bg=PANEL, fg=TEXT, activebackground="#3b587b", activeforeground="white")
+        accounts_menu = tk.Menu(menubar, tearoff=False, bg=PANEL, fg=TEXT)
+        for title, action in (("Adicionar por nick e senha", self.password_dialog), ("Importar cookies", self.import_dialog),
+                              ("Selecionar todas", self.select_all), ("Remover selecionadas", self.remove)):
+            accounts_menu.add_command(label=title, command=action)
+        accounts_menu.add_separator()
+        accounts_menu.add_command(label="Encerrar", command=root.destroy)
+        menubar.add_cascade(label="Contas", menu=accounts_menu)
+        utilities = tk.Menu(menubar, tearoff=False, bg=PANEL, fg=TEXT)
+        for title, action in (("Heartbeat", self.heartbeat), ("Histórico", self.history), ("Diagnóstico", self.diagnostic),
+                              ("Limite de FPS", self.fps_dialog), ("Otimizar", self.show_optimization),
+                              ("Atualizações", self.updates)):
+            utilities.add_command(label=title, command=action)
+        menubar.add_cascade(label="Utilitários", menu=utilities)
+        view_menu = tk.Menu(menubar, tearoff=False, bg=PANEL, fg=TEXT)
+        view_menu.add_command(label="Alternar altura das linhas", command=self.toggle_compact)
+        view_menu.add_command(label="Mostrar / ocultar controles", command=self.toggle_controls)
+        self.detail_columns = tk.BooleanVar(value=False)
+        view_menu.add_checkbutton(label="Mostrar servidor e tentativas", variable=self.detail_columns, command=self.set_list_columns)
+        menubar.add_cascade(label="Exibir", menu=view_menu)
+        menubar.add_command(label="Configurações", command=lambda: self.tabs.select(1))
+        root.configure(menu=menubar)
+        self.menubar = menubar
+
         self.tabs = ttk.Notebook(workspace, style="Workspace.TNotebook")
-        self.tabs.pack(fill="both", expand=True, padx=24)
+        self.tabs.pack(fill="both", expand=True)
         sessions = tk.Frame(self.tabs, bg=BG)
         config = tk.Frame(self.tabs, bg=BG)
         self.tabs.add(sessions, text="Contas")
         self.tabs.add(config, text="Config")
-        self.tabs.bind("<<NotebookTabChanged>>", self.sync_navigation)
-        self.sync_navigation()
         self.build_config(config, settings)
+        self.notice = self.label(workspace, "Iniciando…", size=9, color=MUTED, wrap=950)
+        self.notice.pack(before=self.tabs, side="bottom", fill="x", pady=(5, 0))
+        self.toolbar = toolbar = tk.Frame(sessions, bg=BG)
+        toolbar.pack(side="bottom", fill="x", pady=(6, 0))
+        add_menu = tk.Menu(toolbar, tearoff=False, bg=PANEL, fg=TEXT)
+        add_menu.add_command(label="Nick e senha", command=self.password_dialog)
+        add_menu.add_command(label="Importar cookies", command=self.import_dialog)
+        add = tk.Menubutton(toolbar, text="Adicionar conta ▾", menu=add_menu, bg="#414141", fg=TEXT,
+                            activebackground="#555555", activeforeground=TEXT, relief="raised", bd=1, padx=10, pady=5, cursor="hand2")
+        add.pack(side="left", padx=(0, 5))
+        for title, action in (("Remover", self.remove), ("Selecionar todas", self.select_all),
+                              ("Detalhes", self.connection_details)):
+            self.button(toolbar, title, action).pack(side="left", padx=(0, 5))
+        self.button(toolbar, "Configurações", lambda: self.tabs.select(1)).pack(side="right")
         metrics = tk.Frame(sessions, bg=BG)
-        metrics.pack(fill="x", pady=(0, 16))
+        metrics.pack(side="bottom", fill="x", pady=(5, 0))
         self.metrics = []
-        for title in ("Contas salvas", "Heartbeat ativo", "Fila de abertura"):
-            card = tk.Frame(metrics, bg=PANEL, padx=18, pady=15, highlightthickness=1, highlightbackground=LINE)
-            card.pack(side="left", fill="x", expand=True, padx=(0, 7))
-            self.label(card, title, color=MUTED).pack(anchor="w")
-            value = self.label(card, "—", size=26, bold=True)
-            value.pack(anchor="w")
+        for title in ("Contas:", "Sinais ativos:", "Fila:"):
+            self.label(metrics, title, size=9, color=MUTED).pack(side="left", padx=(0, 4))
+            value = self.label(metrics, "—", size=9, bold=True)
+            value.pack(side="left", padx=(0, 20))
             self.metrics.append(value)
 
         content = tk.Frame(sessions, bg=BG)
-        content.pack(fill="both", expand=True)
-        content.columnconfigure(0, weight=1, minsize=320)
+        content.pack(fill="both", expand=True, pady=(6, 0))
+        content.columnconfigure(0, weight=1, minsize=350)
         content.rowconfigure(0, weight=1)
-        accounts_panel = tk.Frame(content, bg=PANEL, padx=16, pady=16, highlightthickness=1, highlightbackground=LINE)
-        accounts_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
-        table_header = tk.Frame(accounts_panel, bg=PANEL)
-        table_header.pack(fill="x", pady=(0, 12))
-        self.label(table_header, "Contas monitoradas", size=14, bold=True).pack(side="left")
-        self.selection_info = self.label(table_header, "0 selecionadas", size=9, color=MUTED)
-        self.selection_info.pack(side="right")
-        actions = tk.Frame(accounts_panel, bg=PANEL)
-        actions.pack(fill="x", pady=(0, 12))
-        self.button(actions, "Abrir", self.launch, True).pack(side="left", padx=(0, 6))
-        self.button(actions, "Reconectar", lambda: self.action("/reconnect")).pack(side="left", padx=(0, 6))
-        self.button(actions, "Perfil / controles", self.toggle_controls).pack(side="left", padx=(0, 6))
-        self.button(actions, "Selecionar todas", self.select_all).pack(side="left")
-        filters = tk.Frame(accounts_panel, bg=PANEL)
-        filters.pack(fill="x", pady=(0, 12))
+        accounts_panel = tk.Frame(content, bg=BG)
+        accounts_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        filters = tk.Frame(accounts_panel, bg=BG)
+        filters.pack(fill="x", pady=(0, 5))
+        self.label(filters, "Buscar", size=9).pack(side="left", padx=(0, 6))
         self.search = tk.StringVar()
         self.search_field = self.entry(filters)
         self.search_field.configure(textvariable=self.search)
-        self.search_field.pack(side="left", fill="x", expand=True, ipady=7, padx=(0, 8))
-        self.search_field.insert(0, "")
-        self.search_field.bind("<FocusIn>", lambda e: self.search_hint.config(text="Buscar por nick ou ID"))
-        self.search_hint = self.label(accounts_panel, "Buscar por nick ou ID · filtros só alteram a visualização", size=8, color=MUTED)
-        self.search_hint.pack(anchor="w", pady=(0, 8))
+        self.search_field.pack(side="left", fill="x", expand=True, ipady=3, padx=(0, 6))
         self.state_filter = tk.StringVar(value="Todas")
-        chooser = ttk.Combobox(filters, textvariable=self.state_filter, state="readonly", width=15,
-                               values=("Todas", "Conectadas", "Carregando", "Sem sinal", "Com erro", "BLOCK ACC"))
+        chooser = ttk.Combobox(filters, textvariable=self.state_filter, state="readonly", width=13,
+                              values=("Todas", "Conectadas", "Carregando", "Sem sinal", "Com erro", "BLOCK ACC"))
         chooser.pack(side="right")
+        info = tk.Frame(accounts_panel, bg=BG)
+        info.pack(fill="x", pady=(0, 4))
+        self.search_hint = self.label(info, "Contas salvas", size=8, color=MUTED)
+        self.search_hint.pack(side="left")
+        self.selection_info = self.label(info, "0 selecionadas", size=8, color=MUTED)
+        self.selection_info.pack(side="right")
         self.search.trace_add("write", lambda *args: self.filter_accounts())
-        chooser.bind("<<ComboboxSelected>>", lambda e: self.filter_accounts())
-        table_shell = tk.Frame(accounts_panel, bg=PANEL)
+        chooser.bind("<<ComboboxSelected>>", lambda event: self.filter_accounts())
+        table_shell = tk.Frame(accounts_panel, bg=BG)
         table_shell.pack(fill="both", expand=True)
-        self.table = ttk.Treeview(table_shell, columns=("account", "status", "age", "connected", "retry", "server"), show="headings", selectmode="extended")
-        for column, name, width in (("account", "CONTA", 140), ("status", "CONEXÃO", 245), ("age", "SINAL", 65), ("connected", "TEMPO", 70), ("retry", "RECONEXÃO", 110), ("server", "SERVIDOR", 90)):
+        self.table = ttk.Treeview(table_shell, columns=("account", "status", "age", "connected", "retry", "server"),
+                                 displaycolumns=("account", "status", "age", "connected"),
+                                 show="headings", selectmode="extended")
+        for column, name, size in (("account", "Conta", 145), ("status", "Estado", 220), ("age", "Sinal", 55),
+                                    ("connected", "Tempo", 70), ("retry", "Reconexão", 110), ("server", "Servidor", 100)):
             self.table.heading(column, text=name, anchor="w")
-            self.table.column(column, width=width, minwidth=200 if column == "status" else 55, stretch=column == "status")
+            self.table.column(column, width=size, minwidth=100 if column=="status" else 50, stretch=column=="status")
         scrollbar = ttk.Scrollbar(table_shell, orient="vertical", command=self.table.yview)
-        self.table.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
+        self.table.configure(yscrollcommand=scrollbar.set)
         self.table.pack(fill="both", expand=True)
         horizontal = ttk.Scrollbar(accounts_panel, orient="horizontal", command=self.table.xview)
-        horizontal.pack(before=table_shell, side="bottom", fill="x", pady=(4, 0))
+        horizontal.pack(before=table_shell, side="bottom", fill="x")
         self.table.configure(xscrollcommand=horizontal.set)
+        for tag, color in (("even", "#2d2d2d"), ("odd", "#292929")):
+            self.table.tag_configure(tag, background=color)
+        for tag, color in (("online", "#b4dbb6"), ("offline", "#bbbbbb"), ("error", "#ffa0a0"), ("block", "#e9ce8d")):
+            self.table.tag_configure(tag, foreground=color)
+        self.selected_summary = self.label(accounts_panel, "Selecione uma conta. Ctrl e Shift permitem selecionar várias.", size=8, color=MUTED, wrap=650)
+        self.selected_summary.pack(before=table_shell, side="bottom", fill="x", pady=(4, 0))
         self.table.bind("<<TreeviewSelect>>", self.account_selected)
         self.table.bind("<Double-1>", lambda event: self.connection_details())
-        self.table.tag_configure("even", background="#191d26")
-        self.table.tag_configure("odd", background="#151922")
-        self.table.tag_configure("online", foreground="#a1d9bd")
-        self.table.tag_configure("offline", foreground="#b7bfcc")
-        self.table.tag_configure("error", foreground="#ffa5af", background="#2a1c26")
-        self.table.tag_configure("block", foreground=MINT)
-        self.selected_summary = self.label(accounts_panel, "Selecione uma conta para ver o perfil. Duplo clique abre os detalhes.", size=9, color=MUTED, wrap=620)
-        self.selected_summary.pack(before=table_shell, side="bottom", fill="x", pady=(12, 0))
-
-        sidebar_shell = tk.Frame(content, bg=PANEL, width=260, highlightthickness=1, highlightbackground=LINE)
+        self.table.bind("<Button-3>", self.account_context)
+        self.table.bind("<Control-c>", lambda event: self.copy_account("username"))
+        sidebar_shell = tk.Frame(content, bg=PANEL, width=278, highlightthickness=1, highlightbackground=LINE)
         sidebar_shell.grid(row=0, column=1, sticky="ns")
         self.controls_shell = sidebar_shell
-        self.controls_visible = width >= 1200
-        if not self.controls_visible:
-            sidebar_shell.grid_remove()
+        self.controls_visible = True
         sidebar_shell.pack_propagate(False)
         canvas = tk.Canvas(sidebar_shell, bg=PANEL, highlightthickness=0)
         scroll = ttk.Scrollbar(sidebar_shell, orient="vertical", command=canvas.yview)
         scroll.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
         canvas.configure(yscrollcommand=scroll.set)
-        sidebar = tk.Frame(canvas, bg=PANEL, padx=15, pady=12)
+        sidebar = tk.Frame(canvas, bg=PANEL, padx=10, pady=8)
         item = canvas.create_window((0, 0), window=sidebar, anchor="nw")
         sidebar.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfigure(item, width=e.width))
-        self.label(sidebar, "Perfil e execução", size=14, bold=True).pack(anchor="w")
-        self.button(sidebar, "Abrir selecionadas", self.launch, True).pack(fill="x", pady=(14, 6))
-        self.button(sidebar, "Reconectar selecionadas", lambda: self.action("/reconnect")).pack(fill="x", pady=(0, 8))
+        self.label(sidebar, "Conta selecionada", size=9, bold=True).pack(anchor="w")
+        self.current_account = self.label(sidebar, "Nenhuma conta selecionada", size=10, color=MINT, wrap=240)
+        self.current_account.pack(anchor="w", pady=(2, 8))
         self.label(sidebar, "Place ID", color=MUTED).pack(anchor="w", pady=(12, 4))
         self.place = self.entry(sidebar)
         self.place.insert(0, str(settings.get("place", "")))
-        self.place.pack(fill="x", ipady=5)
+        self.place.pack(fill="x", ipady=3)
+        launch_line = tk.Frame(sidebar, bg=PANEL)
+        launch_line.pack(fill="x", pady=(6, 8))
+        self.button(launch_line, "Entrar no jogo", self.launch, True).pack(side="left", fill="x", expand=True, padx=(0, 5))
+        self.button(launch_line, "Reconectar", lambda: self.action("/reconnect")).pack(side="left", fill="x", expand=True)
         self.label(sidebar, "Reconectar após (segundos sem sinal)", wrap=222).pack(anchor="w", pady=(8, 0))
         self.rejoin_delay = self.entry(sidebar)
         self.rejoin_delay.insert(0, str(settings.get("rejoin_delay", 20)))
@@ -224,14 +211,11 @@ class Desktop:
         self.profile_fps.insert(0, "10")
         self.profile_fps.pack(fill="x", ipady=3)
         for title, action in (("Salvar perfil selecionadas", self.save_selected_profile), ("Detalhes da conexão", self.connection_details), ("Cancelar fila", lambda: self.run("/cancel", {})), ("Ativar reconexão", self.rejoin), ("Pausar selecionadas", lambda: self.action("/pause")), ("Selecionar todas", self.select_all), ("Remover selecionadas", self.remove)):
-            self.button(sidebar, title, action, title == "Abrir selecionadas").pack(fill="x", pady=(7, 0))
+            self.button(sidebar, title, action, title == "Abrir selecionadas").pack(fill="x", pady=(4, 0))
         self.rejoin_status = self.label(sidebar, "", color=MUTED, wrap=222)
         self.rejoin_status.pack(anchor="w", pady=(12, 0))
-        self.notice = self.label(workspace, "Iniciando…", size=9, color=MINT, wrap=1000)
-        self.notice.pack(before=self.tabs, side="bottom", fill="x", padx=24, pady=12)
+
         self.root.after(80, self.drain)
-        if self.economy or root.winfo_screenheight() < 800:
-            self.toggle_compact()
         self.refresh()
         repo = accounts.read(assets / "distribution.json", {}).get("repo", "")
         if repo:
@@ -277,7 +261,7 @@ class Desktop:
         self.opt_fps.pack(side="left", padx=(0, 12))
         self.button(line, "OTIMIZAR", lambda: self.optimize("apply"), True).pack(side="left", padx=(0, 8))
         self.button(line, "Restaurar anterior", lambda: self.optimize("restore")).pack(side="left")
-        self.opt_status = self.label(panel, "O perfil também reduz a frequência de atualização do painel e recolhe o banner.", wrap=650)
+        self.opt_status = self.label(panel, "O perfil também reduz a frequência de atualização do painel.", wrap=650)
         self.opt_status.pack(anchor="w")
         block = tk.Frame(performance, bg=PANEL, padx=20, pady=16)
         block.pack(fill="x", padx=18, pady=(0, 12))
@@ -370,17 +354,17 @@ class Desktop:
 
     def label(self, parent, text, size=10, color=TEXT, bold=False, wrap=0):
         return tk.Label(parent, text=text, bg=parent.cget("bg"), fg=color, anchor="w",
-                        justify="left", wraplength=wrap, font=("Segoe UI", size, "bold" if bold else "normal"))
+                        justify="left", wraplength=wrap, font=("Segoe UI", min(size, 14), "bold" if bold else "normal"))
 
     def button(self, parent, text, action, primary=False):
-        return tk.Button(parent, text=text, command=action, bg=MINT if primary else LINE,
-                         fg=BG if primary else TEXT, activebackground="#f0d7b0" if primary else "#343d4d",
-                         activeforeground=BG if primary else TEXT, relief="flat", bd=0, highlightthickness=1, highlightbackground=LINE, highlightcolor=MINT,
-                         padx=12, pady=8, font=("Segoe UI", 9, "bold"), cursor="hand2")
+        return tk.Button(parent, text=text, command=action, bg="#47698f" if primary else "#414141",
+                         fg=TEXT, activebackground="#739fce" if primary else "#505050",
+                         activeforeground=TEXT, relief="raised", bd=1, highlightthickness=0,
+                         padx=8, pady=4, font=("Segoe UI", 9), cursor="hand2")
 
     def entry(self, parent):
-        return tk.Entry(parent, bg="#10151e", fg=TEXT, insertbackground=MINT, relief="flat", bd=0,
-                        highlightthickness=1, highlightbackground=LINE, highlightcolor=MINT, selectbackground="#514333")
+        return tk.Entry(parent, bg="#202020", fg=TEXT, insertbackground=MINT, relief="flat", bd=0,
+                        highlightthickness=1, highlightbackground=LINE, highlightcolor=MINT, selectbackground="#3b587b")
 
     def dialog(self, title):
         window = tk.Toplevel(self.root, bg=PANEL)
@@ -481,12 +465,6 @@ class Desktop:
         else:
             self.controls_shell.grid_remove()
 
-    def sync_navigation(self, event=None):
-        current = self.tabs.index("current")
-        for index, button in enumerate(self.nav_buttons):
-            button.configure(bg="#302a24" if index == current else self.rail.cget("bg"),
-                             fg=MINT if index == current else MUTED)
-
     @staticmethod
     def connection_text(row):
         status = row.get("status", "")
@@ -518,6 +496,12 @@ class Desktop:
 
     def account_selected(self, event=None):
         self.load_profile(event)
+        ids = self.ids()
+        if len(ids) == 1:
+            row = self.rows.get(str(ids[0]), {})
+            self.current_account.config(text=row.get("username", "") + "  /  ID " + str(ids[0]))
+        else:
+            self.current_account.config(text=f"{len(ids)} contas selecionadas")
         self.selection_info.config(text=f"{len(self.ids())} selecionadas")
         if len(self.ids()) == 1:
             row = self.rows.get(str(self.ids()[0]), {})
@@ -650,11 +634,30 @@ class Desktop:
 
     def toggle_compact(self):
         self.compact = not self.compact
-        self.hero.configure(height=0 if self.compact else 136)
-        if self.compact:
-            self.hero.pack_forget()
-        else:
-            self.hero.pack(fill="x", before=self.toolbar)
+        ttk.Style(self.root).configure("Treeview", rowheight=26 if self.compact else 38)
+
+    def set_list_columns(self):
+        self.table.configure(displaycolumns=("account", "status", "age", "connected", "retry", "server") if self.detail_columns.get() else ("account", "status", "age", "connected"))
+
+    def copy_account(self, field):
+        text = "\n".join(str(self.rows.get(str(identity), {}).get(field, identity if field=="userId" else "")) for identity in self.ids())
+        if text:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
+
+    def account_context(self, event):
+        identity = self.table.identify_row(event.y)
+        if identity and identity not in self.table.selection():
+            self.table.selection_set(identity)
+        menu = tk.Menu(self.root, tearoff=False, bg=PANEL, fg=TEXT)
+        for title, action in (("Entrar no jogo", self.launch), ("Reconectar", lambda: self.action("/reconnect")),
+                              ("Copiar nick", lambda: self.copy_account("username")), ("Copiar UserId", lambda: self.copy_account("userId")),
+                              ("Detalhes", self.connection_details), ("Remover", self.remove)):
+            menu.add_command(label=title, command=action)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
 
     def load_profile(self, event=None):
         ids = self.ids()
@@ -913,4 +916,5 @@ class Desktop:
             cancel.set()
             window.destroy()
         window.protocol("WM_DELETE_WINDOW", close)
+
 

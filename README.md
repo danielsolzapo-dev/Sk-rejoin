@@ -78,3 +78,11 @@ Recebido, executando, concluído, falhou ou resultado incerto são estados separ
 Pedidos expiram, ficam registrados antes da execução e não são reaplicados após reinício sem confirmação. Um resultado incerto requer conferir o PC antes de solicitar novamente. A instalação de atualização confirma o envio ao atualizador; a versão exibida após o reinício confirma a instalação efetiva. Não feche o APP durante a instalação.
 
 Execute Tracker e SK Rejoin no mesmo usuário Windows em cada PC. Atualize também os agentes do Tracker. O APP precisa estar aberto para receber comandos; ligar o PC remotamente não faz parte desta integração.
+
+## Versão 0.11.0 — Interface clássica de contas
+
+Interface organizada no estilo do Roblox Account Manager: lista de contas à esquerda, destino e ações à direita, adicionar/remover na barra inferior e menus Contas, Utilitários, Exibir e Configurações. A identidade permanece SK Rejoin.
+
+Adicionar conta abre as opções Nick e senha ou Importar cookies. Clique direito na lista oferece entrar, reconectar, copiar nick/UserId, detalhes e remover. Exibir permite mostrar servidor e tentativas, alterar altura das linhas e recolher os controles. Busca, filtros e seleção múltipla permanecem disponíveis. Config mantém inicialização, WebLauncher e BLOCK ACC.
+
+Esta atualização reorganiza a interface. Não implementa Refresh Cookie nem altera as sessões armazenadas, a autenticação, os comandos do Tracker ou a rotina de abertura dos jogos.

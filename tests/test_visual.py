@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory() as folder:
                      'attempts': 0, 'maxAttempts': 3, 'nextIn': 60, 'jobId': '7a901b26-abc123',
                      'errorCode': error, 'profile': {'place': 2753915549, 'fps': 10}}
                     for i, (name, status, connection, age, error) in enumerate(states, 1)]
-            ui.refresh_done({'accounts': rows, 'waiting': 0, 'busy': False, 'version': '0.9.0',
+            ui.refresh_done({'accounts': rows, 'waiting': 0, 'busy': False, 'version': '0.11.0',
                              'multi': 'Múltiplas instâncias observadas', 'rejoin': 5, 'startupStatus': ''}, None)
             ui.table.selection_set('1')
             ui.search.set('nova')
@@ -50,6 +50,17 @@ with tempfile.TemporaryDirectory() as folder:
             assert len(ui.table.get_children()) == 5
             ui.table.selection_set('1')
             ui.account_selected()
+            assert tuple(ui.table["displaycolumns"]) == ("account", "status", "age", "connected")
+            ui.detail_columns.set(True)
+            ui.set_list_columns()
+            assert len(ui.table["displaycolumns"]) == 6
+            ui.detail_columns.set(False)
+            ui.set_list_columns()
+            ui.copy_account("username")
+            assert window.clipboard_get() == "sk_aurora"
+            ui.copy_account("userId")
+            assert window.clipboard_get() == "1"
+            assert ui.menubar.index("end") == 3
             window.deiconify()
             window.update()
             # Synthetic accounts only. Preview is kept in CI logs for visual QA.
