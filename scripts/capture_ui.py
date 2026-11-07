@@ -78,15 +78,6 @@ for scale in (1.0,1.5):
         prefix=f'{args.label}-{mode}-{round(scale*100)}'
         ui.table.selection_set('1');ui.account_selected();root.update()
         capture(root,prefix+'-main.png')
-        for index,label in [(0,'accounts'),(1,'utilities'),(2,'view')]:
-            menu=root.nametowidget(ui.menubar.entrycget(index,'menu'))
-            menu.post(root.winfo_rootx()+40,root.winfo_rooty()+45)
-            root.update();capture(root,prefix+'-menu-'+label+'.png')
-            menu.unpost();menu.grab_release()
-        if hasattr(ui,'add_menu'):
-            ui.add_menu.post(root.winfo_rootx()+40,root.winfo_rooty()+45)
-            root.update();capture(root,prefix+'-menu-add.png')
-            ui.add_menu.unpost();ui.add_menu.grab_release()
         ui.show_config();root.update()
         for index in range(len(ui.config_sections.tabs())):
             ui.config_sections.select(index);root.update();capture(ui.settings_window,prefix+f'-config-{index}.png')

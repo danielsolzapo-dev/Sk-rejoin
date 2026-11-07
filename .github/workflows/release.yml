@@ -4,14 +4,28 @@ on:
     branches: [main, "ui/**"]
     tags: ['v*']
   workflow_dispatch:
+concurrency:
+  group: sk-ui-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 10
     permissions:
       contents: write
+      actions: write
     steps:
+      - if: github.ref_name == 'ui/revamp-2'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $runs = gh run list --repo $env:GITHUB_REPOSITORY --branch $env:GITHUB_REF_NAME --status in_progress --json databaseId --jq '.[].databaseId'
+          foreach ($runId in $runs) {
+            if ([string]$runId -ne $env:GITHUB_RUN_ID) { gh run cancel $runId --repo $env:GITHUB_REPOSITORY }
+          }
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
