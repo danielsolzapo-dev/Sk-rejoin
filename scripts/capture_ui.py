@@ -45,7 +45,17 @@ def dispatch(self,path,data,callback):
     callback(fixture.get(path,{'ok':True,'message':'Exemplo'}),None)
 
 def capture(window,name):
+    window.deiconify();window.lift()
     window.update_idletasks();window.update()
+    # Tk update finishes before the Windows compositor presents the new surface.
+    # Allow native paint messages to settle before reading desktop pixels.
+    end=time.monotonic()+.25
+    while time.monotonic()<end:
+        window.update();time.sleep(.01)
+    try:
+        import ctypes
+        ctypes.windll.dwmapi.DwmFlush()
+    except (AttributeError,OSError):pass
     x,y=window.winfo_rootx(),window.winfo_rooty();w,h=window.winfo_width(),window.winfo_height()
     try:
         import ctypes
