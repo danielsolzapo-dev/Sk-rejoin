@@ -15,6 +15,7 @@ import bootstrapper
 import optimization
 import server_picker
 import startup
+import bridge_commands
 
 ASSETS = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
 KEY = accounts.read(accounts.ROOT / "heartbeat-key.json", None) or secrets.token_urlsafe(32)
@@ -72,7 +73,7 @@ def public_state():
                        profile=profiles.get(str(identity), {}), rejoin=bool(policy),
                        attempts=policy["attempts"] if policy else 0,
                        maxAttempts=policy["max_attempts"] if policy else None, nextIn=next_in)
-        return {"accounts": rows, "waiting": WAITING, "busy": BUSY, "version": update.VERSION,
+        return {"bridgeProtocol": 2, "bridgeCommands": bridge_commands.snapshot(), "machine": machine_status(), "accounts": rows, "waiting": WAITING, "busy": BUSY, "version": update.VERSION,
                 "startupStatus": STARTUP_STATUS, "rejoin": len(REJOIN), "blockACC": block_enabled(), "economy": bool(accounts.read(SETTINGS, {}).get("economy")), "multi": multi_status(), "repo": accounts.read(ASSETS / "distribution.json", {}).get("repo", "")}
 
 HISTORY = accounts.ROOT / "sk-history.json"
@@ -85,6 +86,8 @@ SERVER_TARGETS = {}
 BLOCK_DIAG = {}
 STARTUP_CANCEL = threading.Event()
 STARTUP_STATUS = ""
+APP_EXIT = None
+MACHINE_CACHE = (0, {})
 
 
 def startup_sequence():
@@ -413,6 +416,142 @@ def start_job(value, *, remember_place=True):
                 BUSY = False
     threading.Thread(target=run, daemon=True).start()
 
+
+def save_account_profile(value):
+    ids = value.get("ids")
+    if not isinstance(ids, list) or not ids or len(ids) > 100 or any(type(i) is not int for i in ids):
+        raise ValueError("Selecione contas cadastradas.")
+    limits = (("place", 1, 10**16-1), ("delay", 10, 3600), ("max_attempts", 1, 20),
+              ("width", 160, 1920), ("height", 120, 1080), ("fps", 1, 240))
+    profile = {}
+    if "rejoin" in value and type(value["rejoin"]) is not bool:
+        raise ValueError("Opção de reconexão inválida.")
+    for key, lo, hi in limits:
+        number = value.get(key)
+        if type(number) is not int or not lo <= number <= hi:
+            raise ValueError("Confira os valores do perfil.")
+        profile[key] = number
+    with LOCK:
+        if BUSY:
+            raise ValueError("Aguarde a fila terminar antes de salvar perfis.")
+        profiles = accounts.read(PROFILES, {})
+        known = {a["userId"] for a in accounts.accounts()}
+        if not set(ids) <= known:
+            raise ValueError("Conta não cadastrada.")
+        for identity in ids:
+            profiles.setdefault(str(identity), {}).update(profile)
+            if identity in REJOIN:
+                REJOIN[identity].update({k: profile[k] for k in ("place", "delay", "max_attempts")})
+            if "rejoin" in value:
+                profiles[str(identity)]["enabled"] = value["rejoin"]
+                if value["rejoin"]:
+                    REJOIN[identity] = {**profile, "attempts": 0, "next": 0}
+                else:
+                    REJOIN.pop(identity, None)
+        accounts.write(PROFILES, profiles)
+    return {"message": "Perfil salvo para as contas selecionadas."}
+
+def machine_status():
+    global MACHINE_CACHE
+    now = time.monotonic()
+    if now - MACHINE_CACHE[0] < 5:
+        return MACHINE_CACHE[1]
+    settings = accounts.read(SETTINGS, {})
+    web = bootstrapper.state()
+    result = {"webLauncherConfigured": web.get("installed") is True,
+              "webLauncherRunning": False, "executorConfigured": bool(settings.get("companionPath")),
+              "executorRunning": False, "startupStatus": STARTUP_STATUS}
+    if os.name == "nt":
+        try:
+            result["webLauncherRunning"] = bool(web.get("path") and windows.executable_running(web["path"]))
+            result["executorRunning"] = bool(settings.get("companionPath") and windows.executable_running(settings["companionPath"]))
+        except (ValueError, OSError):
+            pass
+    MACHINE_CACHE = (now, result)
+    return result
+
+
+def execute_unified(value):
+    action = value["action"]
+    payload = value.get("payload", {})
+    if not isinstance(payload, dict):
+        raise ValueError("Dados do comando inválidos.")
+    if action == "diagnostic":
+        return {"message": "Diagnóstico concluído.", "checks": diagnostic()}
+    if action in ("update_check", "update_install"):
+        if BUSY or startup.SEQUENCE_LOCK.locked():
+            raise ValueError("Aguarde a fila e a preparação deste PC.")
+        repo = accounts.read(ASSETS / "distribution.json", {}).get("repo", "")
+        info, newer = update.manifest(repo)
+        if action == "update_check" or not newer:
+            return {"message": "Atualização disponível." if newer else "APP atualizado.", "version": update.VERSION, "available": info["version"]}
+        if APP_EXIT is None:
+            raise ValueError("Atualização remota requer o APP .exe em execução.")
+        update.install(repo)
+        threading.Timer(2, APP_EXIT).start()
+        return {"message": "Instalação enviada. Aguarde o APP reiniciar e confira a versão.", "available": info["version"]}
+    if BUSY or startup.SEQUENCE_LOCK.locked():
+        raise ValueError("Aguarde a fila ou a preparação atual deste PC.")
+    if action == "prepare":
+        STARTUP_CANCEL.clear()
+        startup_sequence()
+        if STARTUP_STATUS.startswith("Inicialização interrompida"):
+            raise ValueError(STARTUP_STATUS)
+        return {"message": "Sequência de preparação executada. Consulte a fila de contas do APP.", "stage": STARTUP_STATUS}
+    ids = payload.get("ids")
+    known = {row["userId"] for row in accounts.accounts()}
+    if not isinstance(ids, list) or not ids or len(ids) > 100 or any(type(i) is not int or i not in known for i in ids):
+        raise ValueError("Selecione contas salvas neste PC.")
+    ids = list(dict.fromkeys(ids))
+    if action == "profile":
+        return save_account_profile(payload)
+    if action == "close":
+        # Validate every selected identity before closing any process.
+        for identity in ids:
+            binding = BINDINGS.get(identity)
+            if not binding and LIVE.get(identity) and time.monotonic() - LIVE[identity]["received"] < 20:
+                raise ValueError("Conta sem PID seguro. Abra a conta pelo SK Rejoin para controlar a janela.")
+        for identity in ids:
+            binding = BINDINGS.get(identity)
+            if binding and windows.same_process(*binding):
+                windows.close_bound(*binding)
+            with LOCK:
+                REJOIN.pop(identity, None)
+                profiles = accounts.read(PROFILES, {})
+                profiles.setdefault(str(identity), {})["enabled"] = False
+                accounts.write(PROFILES, profiles)
+                LIVE.pop(identity, None)
+                BINDINGS.pop(identity, None)
+                SERVER_TARGETS.pop(identity, None)
+                BLOCK_DIAG.pop(identity, None)
+                STATUS[identity] = "Fechada pelo painel"
+            record(str(identity), "Janela fechada pelo Tracker")
+        return {"message": "Fechamento executado para as contas selecionadas."}
+    profiles = accounts.read(PROFILES, {})
+    place = payload.get("place")
+    use_profiles = place is None
+    if use_profiles:
+        if any(type(profiles.get(str(i), {}).get("place")) is not int for i in ids):
+            raise ValueError("Salve o Place ID no perfil de cada conta ou informe um destino.")
+        place = profiles[str(ids[0])]["place"]
+    if type(place) is not int or not 0 < place < 10**16:
+        raise ValueError("Place ID inválido.")
+    before = {i: LIVE.get(i, {}).get("session") for i in ids}
+    sent = time.monotonic()
+    start_job({"ids": ids, "place": place, "use_profiles": use_profiles, "recover": action == "reconnect"})
+    deadline = sent + 600
+    while BUSY and time.monotonic() < deadline:
+        time.sleep(.5)
+    if BUSY:
+        raise ValueError("A fila continua em andamento. Confira o APP antes de repetir.")
+    with LOCK:
+        confirmed = [i for i in ids if LIVE.get(i, {}).get("received", 0) >= sent
+                     and LIVE[i].get("session") != before[i] and time.monotonic() - LIVE[i]["received"] < 20]
+    if len(confirmed) != len(ids):
+        raise ValueError("Abertura não confirmada para todas as contas. " + " / ".join(STATUS.get(i, "") for i in ids if i not in confirmed)[:260])
+    return {"message": "Nova conexão confirmada pelo Heartbeat para as contas selecionadas."}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -433,7 +572,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.local():
             return self.reply(403, {"error": "Origem inválida."})
-        expected = KEY if self.path == "/heartbeat" else TRACKER_KEY if self.path in ("/tracker/state", "/tracker/reconnect") else ADMIN
+        expected = KEY if self.path == "/heartbeat" else TRACKER_KEY if self.path in ("/tracker/state", "/tracker/reconnect", "/tracker/command") else ADMIN
         if not secrets.compare_digest(self.headers.get("X-Heartbeat-Key" if self.path == "/heartbeat" else "X-Rejoin-Key", ""), expected):
             return self.reply(401, {"error": "Chave inválida."})
         self.path = {"/tracker/state": "/state", "/tracker/reconnect": "/reconnect"}.get(self.path, self.path)
@@ -445,6 +584,8 @@ class Handler(BaseHTTPRequestHandler):
             value = json.loads(self.rfile.read(length))
             if not isinstance(value, dict):
                 raise ValueError("Pedido inválido.")
+            if self.path == "/tracker/command":
+                return self.reply(200, bridge_commands.submit(value, execute_unified))
             if self.path == "/heartbeat":
                 identity, place, session = (value.get(k) for k in ("userId", "placeId", "session"))
                 if type(identity) is not int or type(place) is not int or place <= 0 or not isinstance(session, str) or not 1 <= len(session) <= 80:
@@ -524,30 +665,7 @@ class Handler(BaseHTTPRequestHandler):
                     accounts.write(SETTINGS, settings)
                 return self.reply(200, {"message": "Configurações de inicialização salvas."})
             if self.path == "/profile":
-                ids = value.get("ids")
-                if not isinstance(ids, list) or not ids or len(ids) > 100 or any(type(i) is not int for i in ids):
-                    raise ValueError("Selecione contas cadastradas.")
-                limits = (("place", 1, 10**16-1), ("delay", 10, 3600), ("max_attempts", 1, 20),
-                          ("width", 160, 1920), ("height", 120, 1080), ("fps", 1, 240))
-                profile = {}
-                for key, lo, hi in limits:
-                    number = value.get(key)
-                    if type(number) is not int or not lo <= number <= hi:
-                        raise ValueError("Confira os valores do perfil.")
-                    profile[key] = number
-                with LOCK:
-                    if BUSY:
-                        raise ValueError("Aguarde a fila terminar antes de salvar perfis.")
-                    profiles = accounts.read(PROFILES, {})
-                    known = {a["userId"] for a in accounts.accounts()}
-                    if not set(ids) <= known:
-                        raise ValueError("Conta não cadastrada.")
-                    for identity in ids:
-                        profiles.setdefault(str(identity), {}).update(profile)
-                        if identity in REJOIN:
-                            REJOIN[identity].update({k: profile[k] for k in ("place", "delay", "max_attempts")})
-                    accounts.write(PROFILES, profiles)
-                return self.reply(200, {"message": "Perfil salvo para as contas selecionadas."})
+                return self.reply(200, save_account_profile(value))
             if self.path == "/optimization":
                 with LOCK:
                     if BUSY or windows.running():
@@ -744,7 +862,7 @@ def watch():
             record("Monitor", str(error))
 
 def main():
-    global MULTI_HANDLE, MULTI
+    global MULTI_HANDLE, MULTI, APP_EXIT
     import tkinter as tk
     from tkinter import messagebox
     from desktop import Desktop
@@ -771,6 +889,7 @@ def main():
             except (ValueError, OSError) as error:
                 record("Inicialização", str(error))
         desktop = Desktop(root, PORT, ADMIN, ASSETS, settings)
+        APP_EXIT = lambda: desktop.events.put((lambda value, error: root.destroy(), None, None))
         accounts.write(accounts.ROOT / "tracker-bridge.json", {"port": PORT, "key": TRACKER_KEY})
         root.after(1500, lambda: threading.Thread(target=startup_sequence, daemon=True).start())
         try:
@@ -785,3 +904,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

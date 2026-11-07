@@ -22,6 +22,7 @@ jobs:
       - run: python tests/test_external_launcher.py
       - run: python tests/test_optimization_block.py
       - run: python tests/test_session_upgrade.py
+      - run: python tests/test_unified.py
       - run: python tests/test_visual.py
       - shell: pwsh
         run: |

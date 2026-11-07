@@ -66,3 +66,15 @@ Iniciar com Windows registra o Rejoin para seu usuário. A ordem é garantida de
 Nova navegação lateral, cabeçalho compacto com a arte SK, indicadores maiores e tabela com linhas alternadas. Busca por nick/ID e filtros por estado só mudam a visualização. Linhas escondidas pelos filtros são removidas da seleção para impedir ações em contas ocultas. Duplo clique abre os detalhes da conexão.
 
 Abrir e Reconectar ficam no topo do painel de execução. Há barra horizontal na tabela e rolagem nos diálogos. A janela inicial respeita o tamanho do monitor. Todas as configurações, perfis, sessões e inicialização existentes são preservadas. Nenhuma mudança na rotina de abertura, BLOCK ACC ou reconexão nesta versão.
+
+## Versão 0.10.0 — SK Control / Tracker 3.20.0
+
+Na aba Gerenciador do Tracker, o painel SK Control mostra cada PC, o estado dos programas e suas contas salvas no SK Rejoin. A seleção e os comandos ficam presos ao computador escolhido. Quando o Tracker tem dados do mesmo UserId nesse PC, a conta mostra também nível, mar e atualização do coletor.
+
+Comandos disponíveis: preparar PC usando a sequência salva, abrir, reconectar, fechar, aplicar perfil (incluindo ativar/pausar reconexão), diagnóstico, verificar atualização e instalar atualização do APP pelo GitHub. Abrir e reconectar usam os destinos salvos por conta; salve o Place ID primeiro. Preparar usa os executáveis e as contas configurados localmente na aba Inicialização. O painel não recebe cookies e não permite escolher comandos executáveis arbitrários remotamente.
+
+Recebido, executando, concluído, falhou ou resultado incerto são estados separados. Abrir/reconectar exige uma sessão nova confirmada pelo Heartbeat. Fechar exige o PID e o tempo de criação vinculados localmente e pausa a reconexão das contas fechadas. A preparação confirma a execução da sequência e a entrega das contas à fila; a conexão de cada conta continua visível separadamente.
+
+Pedidos expiram, ficam registrados antes da execução e não são reaplicados após reinício sem confirmação. Um resultado incerto requer conferir o PC antes de solicitar novamente. A instalação de atualização confirma o envio ao atualizador; a versão exibida após o reinício confirma a instalação efetiva. Não feche o APP durante a instalação.
+
+Execute Tracker e SK Rejoin no mesmo usuário Windows em cada PC. Atualize também os agentes do Tracker. O APP precisa estar aberto para receber comandos; ligar o PC remotamente não faz parte desta integração.
