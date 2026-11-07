@@ -251,6 +251,8 @@ class RefinedUI:
     def render_refinement(self):
         if not getattr(self,'refined',False): return
         self.render_footer()
+        if self.rows and self.banner_text.cget('text')==tr('ui_5671c8725752'):
+            self.banner.pack_forget()
         version=str(self.state.get('version','0.12.0'))
         version=re.sub(r'\s*UI preview\b','',version,flags=re.I)
         self.version_chip.config(text=tr('ref_version',version=version))
