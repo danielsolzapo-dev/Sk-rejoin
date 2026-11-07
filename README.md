@@ -52,3 +52,11 @@ O GitHub Actions compila e publica a versão declarada em update.py. Testes de r
 - Detalhes da conexão mostra servidor atual, conflito, destino e espera do BLOCK ACC.
 - Tracker 3.19.0: na aba Gerenciador, estados do SK Rejoin e pedidos de rejoin local ou remoto. Execute ambos no mesmo usuário Windows em cada PC e atualize os agentes. O acesso de controle usa chave local de sessão separada, limitada a estado e rejoin; cookies e senhas não são enviados ao Tracker. Pedidos remotos expiram e não são repetidos após uma tentativa de execução.
 - Substitua o Heartbeat no Auto Execute após atualizar.
+
+## Versão 0.8.1 — Ordem de inicialização
+
+Em Config > Inicialização, configure Rejoin → WebLauncher → Executor → Contas. Escolha o WebLauncher em sua aba, selecione o executor e ajuste as esperas (10 e 20 segundos por padrão, até 180 segundos). Os intervalos não verificam se um executor concluiu sua preparação interna.
+
+Selecione as contas na aba Contas, salve seus perfis com Place ID e depois use Usar contas selecionadas na aba Contas, dentro de Config > Inicialização. Marque Abrir contas selecionadas, salve e use Testar sequência salva. A sequência é executada a cada abertura do Rejoin. Contas já vinculadas ou com heartbeat recente são ignoradas.
+
+Iniciar com Windows registra o Rejoin para seu usuário. A ordem é garantida dentro da sequência do Rejoin; o Windows agenda outros programas de inicialização independentemente. Uma etapa que falha interrompe a sequência e informa o motivo no painel e no histórico. Cancelar sequência interrompe as esperas; Cancelar fila interrompe aberturas de contas já enviadas. Nenhuma elevação de privilégios adicional é aplicada.

@@ -91,6 +91,28 @@ with tempfile.TemporaryDirectory() as temp:
         assert closed == [(101, 99)] and launched == [('account_one', 10)]
         assert 202 in active and app.BINDINGS[2] == (202, 88)
         assert app.STATUS[1] == 'Online'
+        events = []
+        class Wait:
+            def is_set(self): return False
+            def wait(self, seconds): events.append(('wait', seconds)); return False
+        settings = {'startupWebLauncher': True, 'companionEnabled': True, 'startupAccounts': True,
+                    'startupAccountIds': [1, 2], 'webLauncherDelay': 10, 'executorDelay': 20}
+        with patch.object(app.bootstrapper, 'state', return_value={'installed': True, 'path': 'weblauncher.exe'}), patch.object(app.windows, 'executable_running', return_value=False), patch.object(app.bootstrapper, 'open_tool', lambda: events.append('web')), patch.object(startup, 'launch', lambda settings: events.append('executor') or 'opened'):
+            startup.sequence(settings, lambda text: None, lambda ids: events.append(('accounts', ids)), Wait())
+        assert events == ['web', ('wait', 10), 'executor', ('wait', 20), ('accounts', [1, 2])]
+        events.clear()
+        with patch.object(app.bootstrapper, 'state', return_value={'installed': False}), patch.object(startup, 'launch', side_effect=AssertionError('Must not start executor after failed WebLauncher')):
+            try:
+                startup.sequence(settings, lambda text: None, lambda ids: events.append('accounts'), Wait())
+                raise AssertionError('Missing WebLauncher accepted')
+            except ValueError:
+                pass
+        assert not events and not startup.SEQUENCE_LOCK.locked()
+        class Cancel(Wait):
+            def wait(self, seconds): return True
+        with patch.object(app.bootstrapper, 'state', return_value={'installed': True, 'path': 'weblauncher.exe'}), patch.object(app.windows, 'executable_running', return_value=True), patch.object(startup, 'launch', side_effect=AssertionError('Must stop after cancellation')):
+            startup.sequence(settings, lambda text: None, lambda ids: events.append('accounts'), Cancel())
+        assert not events
         print('PASS profiles survive reconnect settings; fresh 773 triggers targeted recovery; bridge key restricted; startup opt-in and quoted command; selected PID closed before instance admission')
     finally:
         server.shutdown()

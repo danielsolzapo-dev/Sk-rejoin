@@ -3,6 +3,9 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import threading
+
+SEQUENCE_LOCK = threading.Lock()
 
 NAME = "SKRejoin"
 RUN = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -51,3 +54,37 @@ def launch(settings):
         return "Aplicativo adicional já está aberto."
     subprocess.Popen([path], cwd=str(Path(path).parent), shell=False)
     return "Aplicativo adicional iniciado."
+
+
+def sequence(settings, log, launch_accounts, cancel):
+    """Order is local to SK Rejoin; Windows schedules the initial Run entry."""
+    import bootstrapper
+    import windows
+    if not SEQUENCE_LOCK.acquire(blocking=False):
+        raise ValueError("A sequência de inicialização já está em andamento.")
+    try:
+        log("1/4 · Rejoin iniciado")
+        if cancel.is_set():
+            return
+        if settings.get("startupWebLauncher"):
+            selected = bootstrapper.state()
+            path = selected.get("path")
+            if not selected.get("installed") or not path:
+                raise ValueError("Escolha ou baixe o WebLauncher em Config → WebLauncher.")
+            log("2/4 · WebLauncher")
+            if not windows.executable_running(path):
+                bootstrapper.open_tool()
+            if cancel.wait(settings.get("webLauncherDelay", 10)):
+                return
+        if settings.get("companionEnabled"):
+            log("3/4 · Executor · " + launch(settings))
+            if cancel.wait(settings.get("executorDelay", 20)):
+                return
+        if settings.get("startupAccounts"):
+            if cancel.is_set():
+                return
+            log("4/4 · Enviando contas salvas para a fila")
+            launch_accounts(settings.get("startupAccountIds", []))
+        log("Sequência de inicialização concluída")
+    finally:
+        SEQUENCE_LOCK.release()

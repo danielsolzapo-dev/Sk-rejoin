@@ -378,7 +378,7 @@ class Desktop:
             for label, value in zip(self.metrics, (len(rows), sum(r["age"] is not None and r["age"] < 20 for r in rows.values()), f'{state["waiting"]} na fila' if state["busy"] else "Livre")):
                 label.config(text=value)
             self.config_multi.config(text=state["multi"])
-            self.rejoin_status.config(text=f'{state["rejoin"]} conta(s) com reconexão ativa\n{state["multi"]}\nVersão {state["version"]}')
+            self.rejoin_status.config(text=f'{state["rejoin"]} conta(s) com reconexão ativa\n{state["multi"]}\n{state.get("startupStatus", "")}\nVersão {state["version"]}')
         self.root.after(4000 if self.economy else 2000, self.refresh)
 
     def select_all(self):
@@ -418,18 +418,38 @@ class Desktop:
     def build_startup(self, host, settings):
         panel = tk.Frame(host, bg=PANEL, padx=20, pady=18)
         panel.pack(fill="x", padx=18, pady=12)
-        self.label(panel, "Inicialização do SK Rejoin", size=16, bold=True).pack(anchor="w")
+        self.label(panel, "Rejoin → WebLauncher → Executor → Contas", size=16, bold=True).pack(anchor="w")
         self.start_windows = tk.BooleanVar(value=bool(settings.get("startWithWindows")))
         self.companion_enabled = tk.BooleanVar(value=bool(settings.get("companionEnabled")))
+        self.start_weblauncher = tk.BooleanVar(value=bool(settings.get("startupWebLauncher", True)))
+        self.start_accounts = tk.BooleanVar(value=bool(settings.get("startupAccounts")))
+        self.startup_ids = list(settings.get("startupAccountIds", []))
         for text, variable in (("Iniciar SK Rejoin ao entrar no Windows", self.start_windows),
-                               ("Abrir o aplicativo escolhido junto com o Rejoin", self.companion_enabled)):
+                               ("2 · Abrir WebLauncher antes do executor", self.start_weblauncher),
+                               ("3 · Abrir executor escolhido", self.companion_enabled),
+                               ("4 · Abrir contas selecionadas após as esperas", self.start_accounts)):
             tk.Checkbutton(panel, text=text, variable=variable, bg=PANEL, fg=TEXT, selectcolor=BG,
                            activebackground=PANEL, activeforeground=TEXT).pack(anchor="w", pady=8)
         self.companion_path = self.entry(panel)
         self.companion_path.insert(0, settings.get("companionPath", ""))
         self.companion_path.pack(fill="x", pady=6)
         self.button(panel, "Selecionar aplicativo (.exe)", self.choose_companion).pack(anchor="w", pady=5)
+        self.start_delays = {}
+        for key, text, default in (("webLauncherDelay", "Espera após WebLauncher (segundos)", 10),
+                                   ("executorDelay", "Espera após executor (segundos)", 20)):
+            self.label(panel, text, color=MUTED).pack(anchor="w", pady=(8, 2))
+            field = self.entry(panel)
+            field.insert(0, str(settings.get(key, default)))
+            field.pack(anchor="w")
+            self.start_delays[key] = field
+        self.startup_count = self.label(panel, str(len(self.startup_ids)) + " contas para iniciar", color=MINT)
+        self.startup_count.pack(anchor="w", pady=8)
+        self.button(panel, "Usar contas selecionadas na aba Contas", self.set_startup_accounts).pack(anchor="w", pady=5)
+        self.label(panel, "Salve o perfil com Place ID de cada conta antes de ativar. As contas entram na fila habitual. "
+                   "Os tempos são esperas configuradas; aumente se o WebLauncher ou executor carregar devagar.", color=MUTED, wrap=700).pack(anchor="w", pady=8)
         self.button(panel, "Salvar inicialização", self.save_startup, True).pack(anchor="w", pady=5)
+        self.button(panel, "Testar sequência salva", lambda: self.run("/startup", {"action": "sequence"})).pack(anchor="w", pady=5)
+        self.button(panel, "Cancelar sequência", lambda: self.run("/startup", {"action": "cancel"})).pack(anchor="w", pady=5)
         self.button(panel, "Abrir aplicativo agora", lambda: self.run("/startup", {"action": "open"}, lambda v: self.notice.config(text=v["message"]))).pack(anchor="w", pady=5)
         self.label(panel, "A inicialização vale para seu usuário do Windows. Mantenha o Rejoin em uma pasta fixa. "
                    "O aplicativo adicional é aberto como programa independente, sem login ou injeção pelo Rejoin.",
@@ -441,9 +461,20 @@ class Desktop:
             self.companion_path.delete(0, "end")
             self.companion_path.insert(0, path)
 
+    def set_startup_accounts(self):
+        self.startup_ids = self.ids()
+        self.startup_count.config(text=str(len(self.startup_ids)) + " contas para iniciar · salve a configuração")
+
     def save_startup(self):
+        try:
+            delays = {key: int(field.get()) for key, field in self.start_delays.items()}
+        except ValueError:
+            self.notice.config(text="Informe esperas inteiras de 1 a 180 segundos.")
+            return
         self.run("/startup", {"startWithWindows": self.start_windows.get(), "companionEnabled": self.companion_enabled.get(),
-                             "companionPath": self.companion_path.get().strip()}, lambda v: self.notice.config(text=v["message"]))
+                             "companionPath": self.companion_path.get().strip(), "startupWebLauncher": self.start_weblauncher.get(),
+                             "startupAccounts": self.start_accounts.get(), "startupAccountIds": self.startup_ids, **delays},
+                 lambda v: self.notice.config(text=v["message"]))
 
     def save_selected_profile(self):
         try:

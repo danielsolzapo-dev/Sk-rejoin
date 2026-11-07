@@ -73,7 +73,7 @@ def public_state():
                        attempts=policy["attempts"] if policy else 0,
                        maxAttempts=policy["max_attempts"] if policy else None, nextIn=next_in)
         return {"accounts": rows, "waiting": WAITING, "busy": BUSY, "version": update.VERSION,
-                "rejoin": len(REJOIN), "blockACC": block_enabled(), "economy": bool(accounts.read(SETTINGS, {}).get("economy")), "multi": multi_status(), "repo": accounts.read(ASSETS / "distribution.json", {}).get("repo", "")}
+                "startupStatus": STARTUP_STATUS, "rejoin": len(REJOIN), "blockACC": block_enabled(), "economy": bool(accounts.read(SETTINGS, {}).get("economy")), "multi": multi_status(), "repo": accounts.read(ASSETS / "distribution.json", {}).get("repo", "")}
 
 HISTORY = accounts.ROOT / "sk-history.json"
 SETTINGS = accounts.ROOT / "sk-settings.json"
@@ -83,6 +83,33 @@ PROFILES = accounts.ROOT / "sk-account-profiles.json"
 BINDINGS = {}
 SERVER_TARGETS = {}
 BLOCK_DIAG = {}
+STARTUP_CANCEL = threading.Event()
+STARTUP_STATUS = ""
+
+
+def startup_sequence():
+    settings = accounts.read(SETTINGS, {})
+    def log(message):
+        global STARTUP_STATUS
+        STARTUP_STATUS = message
+        record("Inicialização", message)
+    def launch_accounts(ids):
+        known = {a["userId"] for a in accounts.accounts()}
+        profiles = accounts.read(PROFILES, {})
+        selected = [i for i in ids if i in known and not (i in BINDINGS and windows.same_process(*BINDINGS[i]))
+                    and not (i in LIVE and time.monotonic() - LIVE[i]["received"] < 20)]
+        if not selected:
+            log("Contas já abertas ou nenhuma conta disponível para iniciar")
+            return
+        for identity in selected:
+            place = profiles.get(str(identity), {}).get("place")
+            if type(place) is not int or not 0 < place < 10**16:
+                raise ValueError("Salve um perfil com Place ID para cada conta da inicialização.")
+        start_job({"ids": selected, "place": profiles[str(selected[0])]["place"], "use_profiles": True})
+    try:
+        startup.sequence(settings, log, launch_accounts, STARTUP_CANCEL)
+    except (ValueError, OSError) as error:
+        log("Inicialização interrompida · " + str(error))
 
 def record(identity, event):
     with LOCK:
@@ -453,6 +480,15 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/startup":
                 with LOCK:
                     settings = accounts.read(SETTINGS, {})
+                    if value.get("action") == "sequence":
+                        if startup.SEQUENCE_LOCK.locked() or BUSY:
+                            raise ValueError("Aguarde a sequência ou a fila atual.")
+                        STARTUP_CANCEL.clear()
+                        threading.Thread(target=startup_sequence, daemon=True).start()
+                        return self.reply(200, {"message": "Sequência iniciada. Acompanhe o estado no painel."})
+                    if value.get("action") == "cancel":
+                        STARTUP_CANCEL.set()
+                        return self.reply(200, {"message": "Sequência cancelada. Programas já abertos continuam disponíveis."})
                     if value.get("action") == "open":
                         return self.reply(200, {"message": startup.launch(settings)})
                     enabled = value.get("startWithWindows")
@@ -462,8 +498,29 @@ class Handler(BaseHTTPRequestHandler):
                     path = startup.executable(value.get("companionPath", ""))
                     if companion and not path:
                         raise ValueError("Escolha o aplicativo que será aberto junto.")
+                    if startup.SEQUENCE_LOCK.locked():
+                        raise ValueError("Cancele a sequência antes de alterar a inicialização.")
+                    extra = {}
+                    for key in ("startupWebLauncher", "startupAccounts"):
+                        extra[key] = value.get(key, settings.get(key, False))
+                        if type(extra[key]) is not bool:
+                            raise ValueError("Opção de inicialização inválida.")
+                    for key, default in (("webLauncherDelay", 10), ("executorDelay", 20)):
+                        extra[key] = value.get(key, settings.get(key, default))
+                        if type(extra[key]) is not int or not 1 <= extra[key] <= 180:
+                            raise ValueError("Use esperas de 1 a 180 segundos.")
+                    ids = value.get("startupAccountIds", settings.get("startupAccountIds", []))
+                    known = {a["userId"] for a in accounts.accounts()}
+                    if not isinstance(ids, list) or len(ids) > 100 or any(type(i) is not int or i not in known for i in ids):
+                        raise ValueError("Confira as contas de inicialização.")
+                    if extra["startupAccounts"]:
+                        profiles = accounts.read(PROFILES, {})
+                        if not ids or any(type(profiles.get(str(i), {}).get("place")) is not int for i in ids):
+                            raise ValueError("Selecione as contas e salve seus perfis com Place ID primeiro.")
+                    extra["startupAccountIds"] = list(dict.fromkeys(ids))
                     startup.set_enabled(enabled)
                     settings.update(startWithWindows=enabled, companionEnabled=companion, companionPath=path)
+                    settings.update(extra)
                     accounts.write(SETTINGS, settings)
                 return self.reply(200, {"message": "Configurações de inicialização salvas."})
             if self.path == "/profile":
@@ -715,13 +772,7 @@ def main():
                 record("Inicialização", str(error))
         desktop = Desktop(root, PORT, ADMIN, ASSETS, settings)
         accounts.write(accounts.ROOT / "tracker-bridge.json", {"port": PORT, "key": TRACKER_KEY})
-        def companion():
-            try:
-                record("Inicialização", startup.launch(settings))
-            except (ValueError, OSError) as error:
-                desktop.events.put((lambda value, error: desktop.notice.config(text=value), str(error), None))
-                record("Inicialização", str(error))
-        root.after(1500, lambda: threading.Thread(target=companion, daemon=True).start())
+        root.after(1500, lambda: threading.Thread(target=startup_sequence, daemon=True).start())
         try:
             desktop.add_tray(tray.attach(root, ASSETS))
         except ImportError:
@@ -729,6 +780,7 @@ def main():
         try:
             root.mainloop()
         finally:
+            STARTUP_CANCEL.set()
             server.shutdown()
 
 if __name__ == "__main__":
