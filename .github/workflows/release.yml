@@ -1,7 +1,7 @@
 name: Rejoin Desk Windows
 on:
   push:
-    branches: [main, ram-ui-0.11.0]
+    branches: [main, compact-ram-0.11.1]
     tags: ['v*']
   workflow_dispatch:
 permissions:

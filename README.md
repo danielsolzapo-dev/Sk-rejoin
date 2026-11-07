@@ -86,3 +86,9 @@ Interface organizada no estilo do Roblox Account Manager: lista de contas à esq
 Adicionar conta abre as opções Nick e senha ou Importar cookies. Clique direito na lista oferece entrar, reconectar, copiar nick/UserId, detalhes e remover. Exibir permite mostrar servidor e tentativas, alterar altura das linhas e recolher os controles. Busca, filtros e seleção múltipla permanecem disponíveis. Config mantém inicialização, WebLauncher e BLOCK ACC.
 
 Esta atualização reorganiza a interface. Não implementa Refresh Cookie nem altera as sessões armazenadas, a autenticação, os comandos do Tracker ou a rotina de abertura dos jogos.
+
+## Versão 0.11.1 — Janela compacta
+
+A janela principal usa 784 × 301 pixels de área de conteúdo, com linhas de 20 pixels. A lista fica à esquerda e o painel de entrada à direita, como no formato compacto do Roblox Account Manager. A moldura e a escala de exibição do Windows acrescentam dimensões externas.
+
+Perfil/reconexão e Configurações abrem em janelas separadas, preservando o tamanho da janela principal. Busca e filtros ficam em Utilitários > Buscar / filtrar (Ctrl+F). Servidor e tentativas podem ser exibidos pelo mesmo menu. O APP continua redimensionável.

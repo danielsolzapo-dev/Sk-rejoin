@@ -76,9 +76,8 @@ with tempfile.TemporaryDirectory() as temp:
    try:
     with patch.object(Desktop, 'refresh'), patch.object(Desktop, 'check_startup_update'):
      desktop = Desktop(window, a.PORT, a.ADMIN, root, {})
-     assert len(desktop.tabs.tabs()) == 2
-     assert desktop.tabs.tab(1, "text") == "Config"
-     desktop.tabs.select(1)
+     assert len(desktop.tabs.tabs()) == 1
+     desktop.show_config()
      desktop.show_optimization()
      assert desktop.config_sections.index("current") == 0
      assert desktop.opt_fps.get() == "10"

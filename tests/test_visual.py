@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory() as folder:
                      'attempts': 0, 'maxAttempts': 3, 'nextIn': 60, 'jobId': '7a901b26-abc123',
                      'errorCode': error, 'profile': {'place': 2753915549, 'fps': 10}}
                     for i, (name, status, connection, age, error) in enumerate(states, 1)]
-            ui.refresh_done({'accounts': rows, 'waiting': 0, 'busy': False, 'version': '0.11.0',
+            ui.refresh_done({'accounts': rows, 'waiting': 0, 'busy': False, 'version': '0.11.1',
                              'multi': 'Múltiplas instâncias observadas', 'rejoin': 5, 'startupStatus': ''}, None)
             ui.table.selection_set('1')
             ui.search.set('nova')
@@ -50,7 +50,7 @@ with tempfile.TemporaryDirectory() as folder:
             assert len(ui.table.get_children()) == 5
             ui.table.selection_set('1')
             ui.account_selected()
-            assert tuple(ui.table["displaycolumns"]) == ("account", "status", "age", "connected")
+            assert tuple(ui.table["displaycolumns"]) == ("account", "status", "age")
             ui.detail_columns.set(True)
             ui.set_list_columns()
             assert len(ui.table["displaycolumns"]) == 6
@@ -61,16 +61,31 @@ with tempfile.TemporaryDirectory() as folder:
             ui.copy_account("userId")
             assert window.clipboard_get() == "1"
             assert ui.menubar.index("end") == 3
+            assert not ui.settings_window.winfo_viewable()
+            assert not ui.profile_window.winfo_viewable()
             window.deiconify()
             window.update()
+            assert window.winfo_width() == 784 and window.winfo_height() == 301
+            assert ui.table.winfo_height() >= 175
             # Synthetic accounts only. Preview is kept in CI logs for visual QA.
             box = (window.winfo_rootx(), window.winfo_rooty(),
                    window.winfo_rootx()+window.winfo_width(), window.winfo_rooty()+window.winfo_height())
             buffer = io.BytesIO()
             ImageGrab.grab(bbox=box).save(buffer, format='PNG')
             print('SK_VISUAL_PREVIEW=' + base64.b64encode(buffer.getvalue()).decode())
-            ui.tabs.select(1)
+            ui.show_config()
             window.update()
+            assert ui.settings_window.winfo_viewable()
+            assert window.winfo_width() == 784 and window.winfo_height() == 301
+            ui.toggle_controls()
+            window.update()
+            assert ui.profile_window.winfo_viewable()
+            assert window.winfo_width() == 784 and window.winfo_height() == 301
+            ui.profile_window.withdraw()
+            ui.settings_window.withdraw()
+            ui.show_search()
+            window.update_idletasks()
+            assert ui.search_field.winfo_viewable()
             for tab in range(3):
                 ui.config_sections.select(tab)
                 window.update_idletasks()
