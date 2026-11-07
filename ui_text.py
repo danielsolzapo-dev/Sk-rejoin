@@ -18,3 +18,5 @@ CATALOG.update({
 CATALOG.update({'ref_stage_confirmed':'✓ Heartbeat recebido', 'ref_error_code':'Erro {code} · {text}', 'ref_last_check':'Última verificação: {time}'})
 
 CATALOG.update({'ref_update_disabled':'Verifique se há uma atualização instalável primeiro.'})
+
+CATALOG.update({'ref_stage_inline':'Etapa: {stage}'})

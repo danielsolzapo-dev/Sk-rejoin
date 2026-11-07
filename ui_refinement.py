@@ -105,7 +105,7 @@ class RefinedUI:
         self.progress_panel = tk.Frame(self.compact_panel)
         self.progress_panel.grid(row=6, column=0, sticky='ew', pady=(4, 2))
         self.progress_title = tk.Label(self.progress_panel, text=tr('ref_stage'), font=(theme.FONT, 8), anchor='w')
-        self.progress_title.pack(fill='x')
+        # Inline caption keeps the stage readable without spending a second row.
         self.progress_text = tk.Label(self.progress_panel, font=(theme.FONT, 8), anchor='w', justify='left', wraplength=round(220*self.ui_scale))
         self.progress_text.pack(fill='x')
         self.progress_panel.bind('<Configure>',lambda event:self.progress_text.config(wraplength=max(1,event.width-2)))
@@ -271,7 +271,7 @@ class RefinedUI:
         elif 'sess' in status or 'autentic' in status:
             observed=tr('ref_stage_session')
         else:observed=tr('ref_stage_unknown')
-        self.progress_text.config(text=observed, fg=self.palette[{'online':'success','loading':'info','block':'warning','offline':'muted','error':'error'}[semantic_state(row)]])
+        self.progress_text.config(text=tr('ref_stage_inline',stage=observed), fg=self.palette[{'online':'success','loading':'info','block':'warning','offline':'muted','error':'error'}[semantic_state(row)]])
         self.install_selection_detail(row)
         recent=tuple(self.ui_prefs.get('destinations',[])[:5])
         if recent!=self._recent_cache:
@@ -285,7 +285,7 @@ class RefinedUI:
 
     def install_selection_detail(self,row):
         # Full observed status is available without claiming unreported stages.
-        if not row:self.progress_text.config(text=tr('ref_select_account'))
+        if not row:self.progress_text.config(text=tr('ref_stage_inline',stage=tr('ref_select_account')))
 
     def select_recent(self,index):
         recent=self.ui_prefs.get('destinations',[])[:5]
