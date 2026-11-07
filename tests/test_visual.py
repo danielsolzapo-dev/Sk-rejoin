@@ -73,6 +73,15 @@ with tempfile.TemporaryDirectory() as folder:
             buffer = io.BytesIO()
             ImageGrab.grab(bbox=box).save(buffer, format='PNG')
             print('SK_VISUAL_PREVIEW=' + base64.b64encode(buffer.getvalue()).decode())
+            # Repeat identical snapshots without rewriting all account rows.
+            with patch.object(ui.table, 'item', wraps=ui.table.item) as item:
+                ui.refresh_done({'accounts': rows, 'waiting': 0, 'busy': False, 'version': 'fixture',
+                                 'multi': 'fixture', 'rejoin': 5, 'startupStatus': ''}, None)
+                assert not item.called
+            hundred = [{**rows[0], 'userId': i, 'username': 'fixture_' + str(i)} for i in range(1, 101)]
+            ui.refresh_done({'accounts': hundred, 'waiting': 0, 'busy': False, 'version': 'fixture',
+                             'multi': 'fixture', 'rejoin': 100, 'startupStatus': ''}, None)
+            assert len(ui.table.get_children()) == 100
             ui.show_config()
             window.update()
             assert ui.settings_window.winfo_viewable()
