@@ -20,8 +20,12 @@ class WorkspaceUI:
         self.drag_start = None
         self.removal_timer = None
         self.ui_config_dirty = False
+        self.profile_dirty = False
+        self.current_profile_id = None
         if not hasattr(self, 'theme_choice'):
             self.theme_choice = tk.StringVar(value='dark')
+        self.profile_window.protocol('WM_DELETE_WINDOW', self.close_profile)
+        self.profile_window.bind('<KeyRelease>', lambda event: setattr(self, 'profile_dirty', True), add='+')
         self.root.configure(menu=self.menubar)
         self.initial_size_calibrated = False
 
@@ -90,7 +94,7 @@ class WorkspaceUI:
         self.last_check = '—'
         self.icons = {}
         self.table.configure(show=tr('ui_018d185002bd'))
-        self.table.column('#0', width=round(24 * self.ui_scale), stretch=False, minwidth=20)
+        self.table.column('#0', width=round(36 * self.ui_scale), stretch=False, minwidth=32)
         self.load_ui_icons()
         self.apply_theme('dark')
 
@@ -535,3 +539,11 @@ class WorkspaceUI:
         if hasattr(self, 'footer_selection'):
             errors = sum((self.row_has_error(row) for row in self.rows.values()))
             self.footer_selection.config(text=tr('ui_df71a54f3933', p0=len(self.ids()), p1=errors))
+
+    def close_profile(self):
+        if self.profile_dirty:
+            if not messagebox.askyesno(tr('ui_c068d5ebc43c'), tr('ui_15eb9e738bf3'), parent=self.profile_window):
+                return
+            self.profile_dirty = False
+            self.load_profile()
+        self.profile_window.withdraw()

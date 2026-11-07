@@ -518,7 +518,7 @@ class Desktop(WorkspaceUI):
             if hasattr(self, 'startup_progress'):
                 self.startup_progress.config(text=state.get('startupStatus', ''))
             if hasattr(self, 'footer_selection'):
-                errors = sum((bool(row.get('errorCode')) for row in rows.values()))
+                errors = sum((self.row_has_error(row) for row in rows.values()))
                 self.footer_selection.config(text=tr('ui_df71a54f3933', p0=len(self.ids()), p1=errors))
             self.rejoin_status.config(text=tr('ui_9de78c0ac341', p0=state['rejoin'], p1=state['multi'], p2=state.get('startupStatus', ''), p3=state['version']))
         self.root.after(4000 if self.economy else 2000, self.refresh)
@@ -681,7 +681,7 @@ class Desktop(WorkspaceUI):
         except ValueError:
             self.notice.config(text=tr('ui_153decdffe9a'))
             return
-        self.run('/profile', payload, lambda v: self.notice.config(text=v['message']))
+        self.run('/profile', payload, lambda v: (setattr(self, 'profile_dirty', False), self.notice.config(text=v['message'])))
 
     def connection_details(self):
         selected = [self.rows.get(str(i), {}) for i in self.ids()]
@@ -733,6 +733,16 @@ class Desktop(WorkspaceUI):
         if len(ids) != 1:
             return
         row = self.rows.get(str(ids[0]), {})
+        if getattr(self, 'profile_dirty', False):
+            previous = getattr(self, 'current_profile_id', None)
+            if previous == ids[0]:
+                return
+            if not messagebox.askyesno(tr('ui_c068d5ebc43c'), tr('ui_5b739f1b1071'), parent=self.root):
+                if previous is not None:
+                    self.table.selection_set(str(previous))
+                return
+        self.profile_dirty = False
+        self.current_profile_id = ids[0]
         profile = row.get('profile', {})
         for key, field in (('place', self.place), ('delay', self.rejoin_delay), ('max_attempts', self.max_attempts), ('fps', self.profile_fps), ('width', self.dimensions['width']), ('height', self.dimensions['height'])):
             if key in profile:
