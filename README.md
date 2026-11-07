@@ -106,3 +106,8 @@ A captura usa apenas a sessão do contexto de login aberto pelo APP e o User-Age
 ## Versão 0.11.3 — User:Pass em campo único
 
 A opção Nick e senha (User:Pass) agora abre diretamente um único campo de texto. Cole nick:senha, uma conta por linha. O APP reconhece e conta as linhas válidas automaticamente. Senhas com dois-pontos continuam preservadas. Permanecem o limite de 6 contas por lote e até 3 navegadores simultâneos. Os dados digitados são limpos ao iniciar ou fechar a importação.
+
+
+## Versão 0.11.4 — diagnóstico de autenticação
+
+A emissão de tickets inclui o cabeçalho de negociação e mantém uma única renovação CSRF fornecida pelo Roblox. Verificações adicionais interrompem a abertura e pedem login oficial. Utilitários → Testar autenticação valida uma conta selecionada e informa a etapa e o HTTP sem exibir cookies ou tickets. Diagnóstico mostra as últimas tentativas, apenas durante esta execução. Um ticket emitido não garante que o launcher/cliente conseguirá autenticar: um 403 posterior ainda exige verificar essa etapa no PC afetado.

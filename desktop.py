@@ -62,7 +62,7 @@ class Desktop:
         accounts_menu.add_command(label="Encerrar", command=root.destroy)
         menubar.add_cascade(label="Contas", menu=accounts_menu)
         utilities = tk.Menu(menubar, tearoff=False, bg=PANEL, fg=TEXT)
-        for title, action in (("Heartbeat", self.heartbeat), ("Histórico", self.history), ("Diagnóstico", self.diagnostic),
+        for title, action in (("Heartbeat", self.heartbeat), ("Histórico", self.history), ("Testar autenticação", self.auth_check), ("Diagnóstico", self.diagnostic),
                               ("Limite de FPS", self.fps_dialog), ("Otimizar", self.show_optimization),
                               ("Atualizações", self.updates)):
             utilities.add_command(label=title, command=action)
@@ -196,7 +196,7 @@ class Desktop:
                               padx=6, pady=2, cursor="hand2")
         tools_menu = tk.Menu(tools, tearoff=False, bg=PANEL, fg=TEXT)
         for title, action in (("Buscar / filtrar (Ctrl+F)", self.show_search), ("Detalhes da conta", self.connection_details),
-                              ("Histórico", self.history), ("Diagnóstico", self.diagnostic), ("FPS", self.fps_dialog),
+                              ("Histórico", self.history), ("Testar autenticação", self.auth_check), ("Diagnóstico", self.diagnostic), ("FPS", self.fps_dialog),
                               ("Otimizar", self.show_optimization), ("Atualizações", self.updates),
                               ("Selecionar todas", self.select_all), ("Cancelar fila", lambda: self.run("/cancel", {}))):
             tools_menu.add_command(label=title, command=action)
@@ -722,6 +722,29 @@ class Desktop:
             if key in profile:
                 field.delete(0, "end")
                 field.insert(0, str(profile[key]))
+
+    def auth_check(self):
+        ids = self.ids()
+        if len(ids) != 1:
+            self.notice.config(text="Selecione uma conta para testar a autenticação.")
+            return
+        try:
+            place = int(self.place.get().strip())
+        except ValueError:
+            self.notice.config(text="Informe um Place ID válido.")
+            return
+        def show(value):
+            body = self.dialog("Teste de autenticação")
+            result = value["result"]
+            lines = [result.get("message", ""),
+                     "Etapa: " + result.get("stage", "—"),
+                     "Sessão válida: " + ("Sim" if result.get("sessionValid") else "Não"),
+                     "Ticket HTTP: " + str(result.get("ticketHTTP", "—")),
+                     "Ticket emitido: " + ("Sim" if result.get("ticketIssued") else "Não"),
+                     "Verificação adicional: " + ("Sim" if result.get("challenge") else "Não"),
+                     "O teste não abre o jogo nem confirma a autenticação dentro do cliente."]
+            self.label(body, "\n\n".join(lines), wrap=520).pack(anchor="w")
+        self.run("/auth-check", {"id": ids[0], "place": place}, show)
 
     def diagnostic(self):
         def show(value):

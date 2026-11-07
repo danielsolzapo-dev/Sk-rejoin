@@ -156,6 +156,8 @@ def diagnostic():
             checks.append("Protocolo Roblox ausente. Abra um jogo pelo site oficial neste PC.")
     checks.append("Sessões locais cadastradas: " + str(len(accounts.accounts())))
     checks.append("Reconexão aguarda um heartbeat desta execução do app antes de monitorar cada conta.")
+    for row in accounts.auth_diagnostics():
+        checks.append(f"Autenticação {row['account']}: etapa {row.get('stage', '—')} · ticket HTTP {row.get('ticketHTTP', '—')} · enviado ao launcher: {'sim' if row.get('handedOff') else 'não'}. {row.get('message', '')}")
     return checks
 
 
@@ -719,6 +721,14 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     raise ValueError("Ação do WebLauncher inválida.")
                 return self.reply(200, result)
+            if self.path == "/auth-check":
+                identity = value.get("id")
+                if type(identity) is not int:
+                    raise ValueError("Selecione uma conta cadastrada.")
+                row = next((row for row in accounts.accounts() if row["userId"] == identity), None)
+                if not row:
+                    raise ValueError("Conta não cadastrada neste PC.")
+                return self.reply(200, {"result": accounts.check_launch_auth(row["username"], value.get("place"))})
             if self.path == "/diagnostic":
                 return self.reply(200, {"checks": diagnostic()})
             if self.path == "/state":

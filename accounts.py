@@ -42,7 +42,7 @@ def request_roblox(kind,cookie,ua='',csrf=None,place=None):
     if kind not in URLS or not valid_cookie(cookie):raise ValueError('Sessão local inválida. Adicione a conta novamente.')
     headers={'Cookie':'.ROBLOSECURITY='+cookie,'User-Agent':ua if isinstance(ua,str) and re.fullmatch(r'[\x20-\x7e]{1,512}',ua) else 'RejoinDesk/0.1','Accept':'application/json'}
     if kind=='ticket':
-        headers.update({'Content-Type':'application/json'})
+        headers.update({'Content-Type':'application/json','RBXAuthenticationNegotiation':'1'})
         headers.update(Origin='https://www.roblox.com',Referer='https://www.roblox.com/games/'+str(place or 0))
         if csrf:headers['X-CSRF-TOKEN']=csrf
     request=Request(URLS[kind],headers=headers,data=b'{}' if kind=='ticket' else None,method='POST' if kind=='ticket' else 'GET')
@@ -59,7 +59,7 @@ def request_roblox(kind,cookie,ua='',csrf=None,place=None):
 
 def authenticated(cookie,ua=''):
     code,_,raw=request_roblox('identity',cookie,ua)
-    if code!=200:raise ValueError('O Roblox não confirmou a sessão. Entre novamente pela janela oficial.')
+    if code!=200:raise ValueError('Validação da sessão recusada pelo Roblox (HTTP '+str(code)+'). Confira o login oficial e a conexão deste PC.')
     try:
         value=json.loads(raw);identity=value['id'];name=value['name'];display=value.get('displayName',name)
         if type(identity) is not int or not 0<identity<10**16 or not isinstance(name,str) or not USERNAME.fullmatch(name) or not isinstance(display,str) or len(display)>100:raise ValueError()
@@ -97,25 +97,84 @@ def open_game(uri):os.startfile(uri)
 
 class LaunchCancelled(ValueError):pass
 
+AUTH_DIAGNOSTICS = {}
+
+
+def _store_auth(username, report):
+    with LOCK:
+        AUTH_DIAGNOSTICS[username.casefold()] = dict(report, account=username, time=time.time())
+        if len(AUTH_DIAGNOSTICS) > 100:
+            del AUTH_DIAGNOSTICS[next(iter(AUTH_DIAGNOSTICS))]
+
+
+def auth_diagnostics():
+    with LOCK:
+        return sorted((dict(row) for row in AUTH_DIAGNOSTICS.values()), key=lambda row: row["time"], reverse=True)[:6]
+
+
+def _prepare_ticket(username, place, report):
+    report["stage"] = "sessão"
+    metadata, secret = load_session(username)
+    cookie, ua = secret["cookie"], secret.get("ua", "")
+    current = authenticated(cookie, ua)
+    if current["userId"] != metadata["userId"]:
+        raise ValueError("A identidade da sessão mudou. Adicione a conta novamente.")
+    report["sessionValid"] = True
+    report["stage"] = "ticket"
+    code, headers, _ = request_roblox("ticket", cookie, ua, place=place)
+    normalized = {key.lower(): value for key, value in headers.items()}
+    report["ticketHTTP"] = code
+    report["challenge"] = bool(normalized.get("rblx-challenge-id") or normalized.get("rblx-challenge-type"))
+    if report["challenge"]:
+        raise ValueError("O Roblox solicitou uma verificação adicional. Conclua o login oficial neste PC.")
+    csrf = normalized.get("x-csrf-token")
+    if code == 403 and isinstance(csrf, str) and re.fullmatch(r"[\x21-\x7e]{1,1024}", csrf):
+        report["csrfRetry"] = True
+        code, headers, _ = request_roblox("ticket", cookie, ua, csrf=csrf, place=place)
+        normalized = {key.lower(): value for key, value in headers.items()}
+        report["ticketHTTP"] = code
+        report["challenge"] = bool(normalized.get("rblx-challenge-id") or normalized.get("rblx-challenge-type"))
+    if report["challenge"]:
+        raise ValueError("O Roblox solicitou uma verificação adicional. Conclua o login oficial neste PC.")
+    ticket = normalized.get("rbx-authentication-ticket", "")
+    if code != 200 or not re.fullmatch(r"[A-Za-z0-9_+/=-]{10,8192}", ticket):
+        raise ValueError("Emissão do ticket recusada pelo Roblox (HTTP " + str(code) + "). Confira Testar autenticação.")
+    report["ticketIssued"] = True
+    return ticket
+
+
+def check_launch_auth(username, place):
+    if not isinstance(username, str) or not USERNAME.fullmatch(username) or type(place) is not int or not 0 < place < 10**16:
+        raise ValueError("Selecione uma conta e informe um Place ID válido.")
+    report = {"sessionValid": False, "csrfRetry": False, "ticketIssued": False, "handedOff": False}
+    try:
+        _prepare_ticket(username, place, report)
+        report.update(stage="verificado", message="Sessão válida e ticket emitido. O teste não abriu o Roblox.")
+    except ValueError as error:
+        report["message"] = str(error)
+    _store_auth(username, report)
+    return dict(report)
+
+
 def launch(username,place,job='',before_open=None):
     if not SUPPORTED:raise ValueError('A abertura do Roblox está disponível no Windows.')
     if not isinstance(username,str) or not USERNAME.fullmatch(username) or type(place) is not int or not 0<place<10**16 or not isinstance(job,str) or (job and not re.fullmatch('[A-Za-z0-9-]{1,80}',job)):raise ValueError('Conta ou destino inválido.')
-    metadata,secret=load_session(username);cookie=secret['cookie'];ua=secret.get('ua','')
-    current=authenticated(cookie,ua)
-    if current['userId']!=metadata['userId']:raise ValueError('A identidade da sessão mudou. Adicione a conta novamente.')
-    code,headers,_=request_roblox('ticket',cookie,ua,place=place)
-    normalized={k.lower():v for k,v in headers.items()}
-    # Standard CSRF handshake, once. Challenges without a CSRF token are not bypassed.
-    if code==403 and isinstance(normalized.get('x-csrf-token'),str) and re.fullmatch(r'[\x21-\x7e]{1,1024}',normalized['x-csrf-token']):
-        code,headers,_=request_roblox('ticket',cookie,ua,csrf=normalized['x-csrf-token'],place=place);normalized={k.lower():v for k,v in headers.items()}
-    ticket=normalized.get('rbx-authentication-ticket','')
-    if code!=200 or not re.fullmatch(r'[A-Za-z0-9_+/=-]{10,8192}',ticket):raise ValueError('Roblox não autorizou a abertura. Faça login novamente; pode haver uma verificação pendente.')
-    destination='https://assetgame.roblox.com/game/PlaceLauncher.ashx?'+urlencode({'request':'RequestGameJob' if job else 'RequestGame','placeId':place,**({'gameId':job} if job else {})})
-    uri='roblox-player:1+launchmode:play+gameinfo:'+quote(ticket,safe='')+'+launchtime:'+str(int(time.time()*1000))+'+placelauncherurl:'+quote(destination,safe='')+'+browsertrackerid:0+robloxLocale:pt_br+gameLocale:pt_br+channel:+LaunchExp:InApp'
-    if before_open is not None and not before_open():raise LaunchCancelled('Reconexão cancelada após a conferência final.')
-    try:open_game(uri)
-    except Exception:raise ValueError('Windows não abriu o protocolo Roblox. Confira se o cliente oficial está instalado neste PC.') from None
-    return True
+    report = {"sessionValid": False, "csrfRetry": False, "ticketIssued": False, "handedOff": False}
+    try:
+        ticket = _prepare_ticket(username, place, report)
+        destination='https://assetgame.roblox.com/game/PlaceLauncher.ashx?'+urlencode({'request':'RequestGameJob' if job else 'RequestGame','browserTrackerId':0,'placeId':place,'isPlayTogetherGame':'false',**({'gameId':job} if job else {})})
+        uri='roblox-player:1+launchmode:play+gameinfo:'+quote(ticket,safe='')+'+launchtime:'+str(int(time.time()*1000))+'+placelauncherurl:'+quote(destination,safe='')+'+browsertrackerid:0+robloxLocale:pt_br+gameLocale:pt_br+channel:+LaunchExp:InApp'
+        if before_open is not None and not before_open():raise LaunchCancelled('Reconexão cancelada após a conferência final.')
+        report["stage"] = "launcher"
+        try:open_game(uri)
+        except Exception:raise ValueError('Windows não abriu o protocolo Roblox. Confira se o cliente oficial está instalado neste PC.') from None
+        report.update(handedOff=True, message="Ticket emitido e abertura enviada ao launcher registrado no Windows.")
+        return True
+    except ValueError as error:
+        report["message"] = str(error)
+        raise
+    finally:
+        _store_auth(username, report)
 
 
 def reserve_multi_instance():
@@ -143,3 +202,4 @@ def remove_accounts(identities):
         for identity in identities:
             vault.pop(str(identity), None)
         write(VAULT, vault)
+
