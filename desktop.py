@@ -27,26 +27,27 @@ class Desktop:
         if (assets / "artwork" / "sk.ico").exists():
             root.iconbitmap(str(assets / "artwork" / "sk.ico"))
         width, height = min(1320, root.winfo_screenwidth()-60), min(850, root.winfo_screenheight()-80)
-        root.geometry(f"{width}x{height}")
+        root.geometry(f"{width}x{height}+20+20")
         root.minsize(980, 620)
         root.configure(bg=BG)
         root.option_add("*Font", ("Segoe UI", 10))
         style = ttk.Style(root)
         style.theme_use("clam")
         style.configure("Treeview", background=PANEL, fieldbackground=PANEL, foreground=TEXT,
-                        rowheight=48, borderwidth=0, font=("Segoe UI", 10))
+                        rowheight=48, borderwidth=0, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE, font=("Segoe UI", 10))
         style.configure("Treeview.Heading", background="#202530", foreground=MUTED, relief="flat",
                         padding=(10, 12), font=("Segoe UI", 9, "bold"))
         style.map("Treeview", background=[("selected", "#3c3540")], foreground=[("selected", TEXT)])
-        style.configure("TNotebook", background=BG, borderwidth=0)
+        style.configure("TNotebook", background=BG, borderwidth=0, bordercolor=BG, lightcolor=BG, darkcolor=BG)
+        style.configure("Workspace.TNotebook", background=BG, borderwidth=0, bordercolor=BG, lightcolor=BG, darkcolor=BG)
         style.configure("TNotebook.Tab", padding=(22, 12), background=BG, foreground=MUTED)
         style.map("TNotebook.Tab", background=[("selected", PANEL)], foreground=[("selected", MINT)])
         style.layout("Workspace.TNotebook.Tab", [])
         style.configure("TCombobox", fieldbackground="#10151e", background=LINE, foreground=TEXT,
-                        arrowcolor=MINT, padding=7)
+                        arrowcolor=MINT, padding=7, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
         style.map("TCombobox", fieldbackground=[("readonly", "#10151e")], foreground=[("readonly", TEXT)])
-        style.configure("Vertical.TScrollbar", background=LINE, troughcolor=BG, borderwidth=0, arrowsize=12)
-        style.configure("Horizontal.TScrollbar", background=LINE, troughcolor=BG, borderwidth=0, arrowsize=12)
+        style.configure("Vertical.TScrollbar", background=LINE, troughcolor=BG, borderwidth=0, arrowsize=12, lightcolor=LINE, darkcolor=LINE, bordercolor=LINE)
+        style.configure("Horizontal.TScrollbar", background=LINE, troughcolor=BG, borderwidth=0, arrowsize=12, lightcolor=LINE, darkcolor=LINE, bordercolor=LINE)
 
         shell = tk.Frame(root, bg=BG)
         shell.pack(fill="both", expand=True)
@@ -117,13 +118,21 @@ class Desktop:
 
         content = tk.Frame(sessions, bg=BG)
         content.pack(fill="both", expand=True)
+        content.columnconfigure(0, weight=1, minsize=320)
+        content.rowconfigure(0, weight=1)
         accounts_panel = tk.Frame(content, bg=PANEL, padx=16, pady=16, highlightthickness=1, highlightbackground=LINE)
-        accounts_panel.pack(side="left", fill="both", expand=True, padx=(0, 12))
+        accounts_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
         table_header = tk.Frame(accounts_panel, bg=PANEL)
         table_header.pack(fill="x", pady=(0, 12))
         self.label(table_header, "Contas monitoradas", size=14, bold=True).pack(side="left")
         self.selection_info = self.label(table_header, "0 selecionadas", size=9, color=MUTED)
         self.selection_info.pack(side="right")
+        actions = tk.Frame(accounts_panel, bg=PANEL)
+        actions.pack(fill="x", pady=(0, 12))
+        self.button(actions, "Abrir", self.launch, True).pack(side="left", padx=(0, 6))
+        self.button(actions, "Reconectar", lambda: self.action("/reconnect")).pack(side="left", padx=(0, 6))
+        self.button(actions, "Perfil / controles", self.toggle_controls).pack(side="left", padx=(0, 6))
+        self.button(actions, "Selecionar todas", self.select_all).pack(side="left")
         filters = tk.Frame(accounts_panel, bg=PANEL)
         filters.pack(fill="x", pady=(0, 12))
         self.search = tk.StringVar()
@@ -165,7 +174,11 @@ class Desktop:
         self.selected_summary.pack(fill="x", pady=(12, 0))
 
         sidebar_shell = tk.Frame(content, bg=PANEL, width=260, highlightthickness=1, highlightbackground=LINE)
-        sidebar_shell.pack(side="right", fill="y")
+        sidebar_shell.grid(row=0, column=1, sticky="ns")
+        self.controls_shell = sidebar_shell
+        self.controls_visible = width >= 1200
+        if not self.controls_visible:
+            sidebar_shell.grid_remove()
         sidebar_shell.pack_propagate(False)
         canvas = tk.Canvas(sidebar_shell, bg=PANEL, highlightthickness=0)
         scroll = ttk.Scrollbar(sidebar_shell, orient="vertical", command=canvas.yview)
@@ -460,6 +473,13 @@ class Desktop:
             self.config_multi.config(text=state["multi"])
             self.rejoin_status.config(text=f'{state["rejoin"]} conta(s) com reconexão ativa\n{state["multi"]}\n{state.get("startupStatus", "")}\nVersão {state["version"]}')
         self.root.after(4000 if self.economy else 2000, self.refresh)
+
+    def toggle_controls(self):
+        self.controls_visible = not self.controls_visible
+        if self.controls_visible:
+            self.controls_shell.grid()
+        else:
+            self.controls_shell.grid_remove()
 
     def sync_navigation(self, event=None):
         current = self.tabs.index("current")
