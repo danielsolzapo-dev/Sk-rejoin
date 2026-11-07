@@ -160,7 +160,7 @@ class Desktop:
         scrollbar.pack(side="right", fill="y")
         self.table.pack(fill="both", expand=True)
         horizontal = ttk.Scrollbar(accounts_panel, orient="horizontal", command=self.table.xview)
-        horizontal.pack(fill="x", pady=(4, 0))
+        horizontal.pack(before=table_shell, side="bottom", fill="x", pady=(4, 0))
         self.table.configure(xscrollcommand=horizontal.set)
         self.table.bind("<<TreeviewSelect>>", self.account_selected)
         self.table.bind("<Double-1>", lambda event: self.connection_details())
@@ -171,7 +171,7 @@ class Desktop:
         self.table.tag_configure("error", foreground="#ffa5af", background="#2a1c26")
         self.table.tag_configure("block", foreground=MINT)
         self.selected_summary = self.label(accounts_panel, "Selecione uma conta para ver o perfil. Duplo clique abre os detalhes.", size=9, color=MUTED, wrap=620)
-        self.selected_summary.pack(fill="x", pady=(12, 0))
+        self.selected_summary.pack(before=table_shell, side="bottom", fill="x", pady=(12, 0))
 
         sidebar_shell = tk.Frame(content, bg=PANEL, width=260, highlightthickness=1, highlightbackground=LINE)
         sidebar_shell.grid(row=0, column=1, sticky="ns")
@@ -228,9 +228,9 @@ class Desktop:
         self.rejoin_status = self.label(sidebar, "", color=MUTED, wrap=222)
         self.rejoin_status.pack(anchor="w", pady=(12, 0))
         self.notice = self.label(workspace, "Iniciando…", size=9, color=MINT, wrap=1000)
-        self.notice.pack(fill="x", padx=24, pady=12)
+        self.notice.pack(before=self.tabs, side="bottom", fill="x", padx=24, pady=12)
         self.root.after(80, self.drain)
-        if self.economy:
+        if self.economy or root.winfo_screenheight() < 800:
             self.toggle_compact()
         self.refresh()
         repo = accounts.read(assets / "distribution.json", {}).get("repo", "")
