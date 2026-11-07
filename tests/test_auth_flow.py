@@ -50,8 +50,9 @@ with patch.object(a, 'build_opener') as opener, patch.object(a, 'ProxyHandler', 
     request = opener.return_value.open.call_args.args[0]
     headers = {key.lower(): value for key, value in request.header_items()}
     assert 'rbxauthenticationnegotiation' not in headers
-    assert 'origin' not in headers and 'content-type' not in headers
-    assert request.data is None
+    assert 'origin' not in headers
+    assert headers['content-type'] == 'application/json'
+    assert json.loads(request.data) == {}
     assert headers['referer'] == 'https://www.roblox.com/games/123'
     assert headers['x-csrf-token'] == csrf
     assert request.full_url == a.URLS['ticket'] and request.method == 'POST'
@@ -77,3 +78,26 @@ with patch.object(a, 'load_session', return_value=(metadata, {'cookie': cookie})
         assert '+gameinfo:launch_fixture_456+' in opened.call_args.args[0]
         assert 'diagnostic_fixture_123' not in opened.call_args.args[0]
 print('Native ticket request and diagnostic/launch separation passed.')
+
+# Exercise the actual urllib transport against a local strict JSON endpoint.
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import threading
+class JSONEndpoint(BaseHTTPRequestHandler):
+    def log_message(self, *args): pass
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers.get('Content-Length', '0')))
+        valid = self.headers.get('Content-Type') == 'application/json' and body == b'{}'
+        self.send_response(200 if valid else 415)
+        self.send_header('rbx-authentication-ticket', 'local_fixture_ticket')
+        self.end_headers()
+server = ThreadingHTTPServer(('127.0.0.1', 0), JSONEndpoint)
+thread = threading.Thread(target=server.serve_forever, daemon=True)
+thread.start()
+try:
+    with patch.dict(a.URLS, {'ticket': f'http://127.0.0.1:{server.server_port}/ticket'}), patch.object(a, 'ProxyHandler', side_effect=lambda: __import__('urllib.request', fromlist=['ProxyHandler']).ProxyHandler({})):
+        assert a.request_roblox('ticket', cookie, place=123)[0] == 200
+finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=2)
+print('Strict JSON transport check passed (local endpoint only).')

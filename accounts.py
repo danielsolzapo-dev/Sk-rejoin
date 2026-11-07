@@ -51,11 +51,11 @@ def request_roblox(kind,cookie,ua='',csrf=None,place=None):
     if kind not in URLS or not valid_cookie(cookie):raise ValueError('Sessão local inválida. Adicione a conta novamente.')
     headers={'Cookie':'.ROBLOSECURITY='+cookie,'User-Agent':ua if isinstance(ua,str) and re.fullmatch(r'[\x20-\x7e]{1,512}',ua) else 'RejoinDesk/0.1','Accept':'application/json'}
     if kind=='ticket':
-        # Match the native launcher ticket flow: empty POST, CSRF and game referer.
-        # Do not request an additional authentication negotiation mode.
+        # The endpoint requires JSON media type, including for an empty object.
+        headers['Content-Type']='application/json'
         headers['Referer']='https://www.roblox.com/games/'+str(place or 0)
         if csrf:headers['X-CSRF-TOKEN']=csrf
-    request=Request(URLS[kind],headers=headers,data=None,method='POST' if kind=='ticket' else 'GET')
+    request=Request(URLS[kind],headers=headers,data=b'{}' if kind=='ticket' else None,method='POST' if kind=='ticket' else 'GET')
     try:
         with build_opener(ProxyHandler(),NoRedirect()).open(request,timeout=15) as response:
             raw=response.read(32769)

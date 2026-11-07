@@ -126,3 +126,8 @@ A autenticação deixa de desativar explicitamente os proxies do sistema/ambient
 ## Versão 0.11.7 — requisição de ticket para abertura nativa
 
 A emissão usa POST vazio com Referer e renovação CSRF, alinhado ao fluxo do Roblox Account Manager. Foram removidos o corpo JSON vazio e os cabeçalhos Origin e RBXAuthenticationNegotiation adicionados pelo Rejoin. Cada abertura emite seu próprio ticket; o teste de autenticação nunca fornece o ticket de uma abertura posterior. Os testes verificam a requisição e a entrega ao protocolo com sessões simuladas; não confirmam o resgate no cliente Roblox. O log do PC afetado identifica 403 em authentication-ticket/redeem, portanto essa etapa ainda requer validação real após atualizar.
+
+
+## Versão 0.11.8 — correção da regressão HTTP 415
+
+Restaura Content-Type application/json e corpo JSON vazio na emissão de tickets. A versão 0.11.7 retirou o formato e o endpoint respondeu HTTP 415 no PC afetado. O teste agora passa pelo transporte HTTP real contra um servidor local que rejeita formatos incorretos. O cabeçalho adicional RBXAuthenticationNegotiation permanece ausente. Esta correção trata a regressão 415; a resolução do 403 durante o resgate ainda não foi confirmada no cliente.
