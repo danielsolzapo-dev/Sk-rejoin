@@ -47,7 +47,7 @@ with tempfile.TemporaryDirectory() as folder:
             ui.ui_prefs['destinations']=[1,2,3,4,5,6];ui.render_refinement();root.update()
             assert sum(bool(link.winfo_manager()) for link in ui.recent_links)==5
             for link in ui.recent_links:
-                assert link.winfo_rooty()+link.winfo_height()<=ui.compact_panel.winfo_rooty()+ui.compact_panel.winfo_height(),('Recent destination clipped',scale,mode)
+                assert link.winfo_rooty()+link.winfo_height()<=ui.compact_panel.winfo_rooty()+ui.compact_panel.winfo_height(),('Recent destination clipped',scale,mode,link.winfo_rooty(),link.winfo_height(),ui.compact_panel.winfo_rooty(),ui.compact_panel.winfo_height(),ui.progress_panel.winfo_height(),ui.recent_panel.winfo_height(),ui.destination_error.winfo_manager())
             ui.select_recent(3);assert ui.place.get()=='4'
             ui.notice.config(text='fixture transient');assert ui.footer_summary.cget('text')=='fixture transient'
             ui.clear_status_message();assert 'Contas: 100' in ui.footer_summary.cget('text')

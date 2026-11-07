@@ -129,6 +129,7 @@ class RefinedUI:
         self.install_tooltip(self.chip_update,lambda:tr('ref_last_check',time=self.last_check))
         self.style_refinement()
         self.render_refinement()
+        self.validate_destination()
 
     def make_chip(self, parent, text, action, dot=True):
         label = tk.Label(parent, text=('●  ' if dot else '')+text, font=(theme.FONT, 8), cursor='hand2', takefocus=True, padx=3, pady=2, highlightthickness=1)
