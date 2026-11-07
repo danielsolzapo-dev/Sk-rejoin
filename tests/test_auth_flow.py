@@ -49,7 +49,10 @@ with patch.object(a, 'build_opener') as opener, patch.object(a, 'ProxyHandler', 
     proxy_handler.assert_called_once_with()
     request = opener.return_value.open.call_args.args[0]
     headers = {key.lower(): value for key, value in request.header_items()}
-    assert headers['rbxauthenticationnegotiation'] == '1'
+    assert 'rbxauthenticationnegotiation' not in headers
+    assert 'origin' not in headers and 'content-type' not in headers
+    assert request.data is None
+    assert headers['referer'] == 'https://www.roblox.com/games/123'
     assert headers['x-csrf-token'] == csrf
     assert request.full_url == a.URLS['ticket'] and request.method == 'POST'
 print('Authentication flow checks passed (synthetic sessions only).')
@@ -60,3 +63,17 @@ with patch.object(a, 'getproxies', return_value={'https': 'http://fixture-user:f
     assert all(secret not in summary for secret in ('fixture-user', 'fixture-password', 'proxy.invalid'))
 with patch.object(a, 'getproxies', return_value={}):
     assert 'detectado: não' in a.network_diagnostic()
+
+# A diagnostic ticket must never be cached or reused for an actual launch.
+with patch.object(a, 'load_session', return_value=(metadata, {'cookie': cookie})), patch.object(a, 'authenticated', return_value=metadata), patch.object(a, 'SUPPORTED', True), patch.object(a, 'open_game') as opened:
+    with patch.object(a, 'request_roblox', side_effect=[
+            (403, {'x-csrf-token': csrf}, b''),
+            (200, {'rbx-authentication-ticket': 'diagnostic_fixture_123'}, b''),
+            (403, {'x-csrf-token': csrf}, b''),
+            (200, {'rbx-authentication-ticket': 'launch_fixture_456'}, b'')]) as request:
+        assert a.check_launch_auth('fixture_user', 123)['ticketIssued']
+        a.launch('fixture_user', 123)
+        assert request.call_count == 4
+        assert '+gameinfo:launch_fixture_456+' in opened.call_args.args[0]
+        assert 'diagnostic_fixture_123' not in opened.call_args.args[0]
+print('Native ticket request and diagnostic/launch separation passed.')

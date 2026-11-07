@@ -121,3 +121,8 @@ O campo gameinfo recebe o ticket validado no formato original, como no Roblox Ac
 ## Versão 0.11.6 — configuração de rede da autenticação
 
 A autenticação deixa de desativar explicitamente os proxies do sistema/ambiente. O diagnóstico informa somente a presença de proxy HTTPS, sem endereços, credenciais ou tickets. PAC, proxies específicos de outros programas e VPNs ainda podem produzir rotas diferentes. A alteração corrige a divergência de configuração; não confirma a causa de um 403 no cliente.
+
+
+## Versão 0.11.7 — requisição de ticket para abertura nativa
+
+A emissão usa POST vazio com Referer e renovação CSRF, alinhado ao fluxo do Roblox Account Manager. Foram removidos o corpo JSON vazio e os cabeçalhos Origin e RBXAuthenticationNegotiation adicionados pelo Rejoin. Cada abertura emite seu próprio ticket; o teste de autenticação nunca fornece o ticket de uma abertura posterior. Os testes verificam a requisição e a entrega ao protocolo com sessões simuladas; não confirmam o resgate no cliente Roblox. O log do PC afetado identifica 403 em authentication-ticket/redeem, portanto essa etapa ainda requer validação real após atualizar.
