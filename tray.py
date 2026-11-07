@@ -39,7 +39,7 @@ def attach(root, assets, callbacks=None, state=None, preferences=None):
                 action = events.get_nowait()
                 if action == 'exit':
                     if holder.get('icon'):
-                        holder['icon'].stop()
+                        Thread(target=holder['icon'].stop, daemon=True).start()
                     root.destroy()
                     return
                 if action == 'toggle':
@@ -78,7 +78,7 @@ def attach(root, assets, callbacks=None, state=None, preferences=None):
 
     def stop(event):
         if event.widget is root and holder.get('icon'):
-            holder['icon'].stop()
+            Thread(target=holder['icon'].stop, daemon=True).start()
     root.protocol('WM_DELETE_WINDOW', hide)
     root.bind('<Destroy>', stop, add='+')
     root.after(200, poll)

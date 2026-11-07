@@ -110,3 +110,21 @@ def scale_for(root):
             if dpi:return max(1.0,dpi/96)
         except (AttributeError,OSError):pass
     return max(1.0,round(root.winfo_fpixels('1i')/96*4)/4)
+
+def work_area(root):
+    if os.name=='nt':
+        try:
+            import ctypes
+            from ctypes import wintypes
+            class MonitorInfo(ctypes.Structure):
+                _fields_=[('size',wintypes.DWORD),('monitor',wintypes.RECT),('work',wintypes.RECT),('flags',wintypes.DWORD)]
+            user=ctypes.windll.user32
+            user.MonitorFromWindow.argtypes=[ctypes.c_void_p,wintypes.DWORD]
+            user.MonitorFromWindow.restype=ctypes.c_void_p
+            info=MonitorInfo();info.size=ctypes.sizeof(info)
+            user.GetMonitorInfoW.argtypes=[ctypes.c_void_p,ctypes.POINTER(MonitorInfo)]
+            if user.GetMonitorInfoW(user.MonitorFromWindow(root.winfo_id(),2),ctypes.byref(info)):
+                r=info.work
+                return r.left,r.top,r.right-r.left,r.bottom-r.top
+        except (AttributeError,OSError):pass
+    return 0,0,root.winfo_screenwidth(),root.winfo_screenheight()

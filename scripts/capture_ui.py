@@ -53,7 +53,12 @@ def capture(window,name):
         rect=wintypes.RECT()
         fn=ctypes.windll.user32.GetWindowRect
         fn.argtypes=[ctypes.c_void_p,ctypes.POINTER(wintypes.RECT)]
-        if fn(int(window.frame(),0),ctypes.byref(rect)):
+        handle=int(window.frame(),0)
+        if fn(handle,ctypes.byref(rect)):
+            dwm=ctypes.windll.dwmapi.DwmGetWindowAttribute
+            dwm.argtypes=[ctypes.c_void_p,ctypes.c_uint,ctypes.c_void_p,ctypes.c_uint]
+            visible=wintypes.RECT()
+            if dwm(handle,9,ctypes.byref(visible),ctypes.sizeof(visible))==0:rect=visible
             x,y,w,h=rect.left,rect.top,rect.right-rect.left,rect.bottom-rect.top
     except (AttributeError,OSError,ValueError):pass
     ImageGrab.grab((x,y,x+w,y+h)).save(OUT/name)
@@ -69,10 +74,19 @@ for scale in (1.0,1.5):
             # Drain asynchronous preferences before choosing the render theme.
             end=time.monotonic()+.2
             while time.monotonic()<end:root.update();time.sleep(.01)
-            ui.apply_theme(mode);ui.ui_scale=scale;theme.apply(root,ui.palette,scale)
+            ui.theme_choice.set(mode);ui.apply_theme(mode);ui.ui_scale=scale;theme.apply(root,ui.palette,scale)
         prefix=f'{args.label}-{mode}-{round(scale*100)}'
         ui.table.selection_set('1');ui.account_selected();root.update()
         capture(root,prefix+'-main.png')
+        for index,label in [(0,'accounts'),(1,'utilities'),(2,'view')]:
+            menu=root.nametowidget(ui.menubar.entrycget(index,'menu'))
+            menu.post(root.winfo_rootx()+40,root.winfo_rooty()+45)
+            root.update();capture(root,prefix+'-menu-'+label+'.png')
+            menu.unpost();menu.grab_release()
+        if hasattr(ui,'add_menu'):
+            ui.add_menu.post(root.winfo_rootx()+40,root.winfo_rooty()+45)
+            root.update();capture(root,prefix+'-menu-add.png')
+            ui.add_menu.unpost();ui.add_menu.grab_release()
         ui.show_config();root.update()
         for index in range(len(ui.config_sections.tabs())):
             ui.config_sections.select(index);root.update();capture(ui.settings_window,prefix+f'-config-{index}.png')

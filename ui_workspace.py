@@ -30,6 +30,17 @@ class WorkspaceUI:
                 self.initial_size_calibrated = True
                 self.root.after_idle(self.calibrate_content_size)
         self.root.bind('<Map>', mapped, add='+')
+        for index in range(4):
+            self.menubar.entryconfigure(index, underline=1 if index == 3 else 0)
+        for parent in (0, 1):
+            menu = self.root.nametowidget(self.menubar.entrycget(parent, 'menu'))
+            for index in range((menu.index('end') or 0) + 1):
+                if menu.type(index) != 'command':
+                    continue
+                label = menu.entrycget(index, 'label')
+                shortcut = 'Ctrl+N' if label.startswith(tr('ui_fadcf2d5a3d5')) else 'Ctrl+A' if label == tr('ui_8366d72b4661') else tr('ui_717e1e93af99') if label.startswith(tr('ui_4bd4ea834263')) else ''
+                if shortcut:
+                    menu.entryconfigure(index, accelerator=shortcut)
         view = self.root.nametowidget(self.menubar.entrycget(2, 'menu'))
         for label, mode in [(tr('ui_0d7f97c38367'), 'dark'), (tr('ui_21f72c3cc4b9'), 'light'), (tr('ui_cdb5c53c91f0'), 'system')]:
             view.add_radiobutton(label=label, variable=self.theme_choice, value=mode, command=lambda m=mode: self.choose_theme(m))
@@ -119,10 +130,11 @@ class WorkspaceUI:
 
     def persist_ui(self):
         snapshot = json.loads(json.dumps(self.ui_prefs))
+        revision = time.monotonic_ns()
 
         def worker():
             try:
-                ui_preferences.save(snapshot)
+                ui_preferences.save(snapshot, revision)
             except OSError:
                 self.events.put((lambda value, error: self.notice.config(text=tr('ui_af2e99d571cf')), None, None))
         Thread(target=worker, daemon=True).start()
@@ -419,11 +431,17 @@ class WorkspaceUI:
                         values[mode, state] = (assets / 'artwork' / 'icons' / f'{mode}-{state}-{size}.png').read_bytes()
                     except OSError:
                         pass
+            try:
+                values['brand'] = (assets / 'artwork' / 'portrait.png').read_bytes()
+            except OSError:
+                pass
             self.events.put((self.icons_ready, values, None))
         Thread(target=load, daemon=True).start()
 
     def icons_ready(self, values, error):
         self.icons = {key: tk.PhotoImage(master=self.root, data=data, format='png') for key, data in values.items()}
+        if 'brand' in self.icons:
+            self.root.iconphoto(True, self.icons['brand'])
         self.refresh_icon_rows()
 
     def refresh_icon_rows(self):

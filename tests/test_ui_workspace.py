@@ -46,6 +46,23 @@ with tempfile.TemporaryDirectory() as directory:
             with patch.object(ui,'run',side_effect=AssertionError('Undo must not send remove')):
                 ui.undo_remove();root.update()
             assert not ui.removal_timer
+            ui.import_dialog();root.update()
+            window=next(w for w in root.winfo_children() if isinstance(w,tk.Toplevel) and w.title()=='Importar sessões')
+            def children(widget):
+                out=[]
+                for child in widget.winfo_children():out.append(child);out.extend(children(child))
+                return out
+            widgets=children(window)
+            field=next(w for w in widgets if isinstance(w,tk.Entry))
+            assert field.cget('show')=='•'
+            root.clipboard_clear();root.clipboard_append('fixture-session-A-'*3+'\n'+'fixture-session-B-'*3)
+            field.event_generate('<<Paste>>');root.update()
+            button=next(w for w in widgets if isinstance(w,tk.Button) and w.cget('text')=='Validar e importar')
+            with patch.object(ui,'run') as request:
+                button.invoke()
+                assert len(request.call_args.args[1]['cookies'].splitlines())==2
+                assert field.get()==''
+            window.destroy()
             ui.column_dialog();ui.command_palette();ui.first_run();root.update()
             assert root.winfo_width()==784 and root.winfo_height()==301
             assert not list(ui_preferences.location().parent.glob('native-sessions*'))

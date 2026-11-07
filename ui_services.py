@@ -19,6 +19,8 @@ def change_fps(fps):
     if not isinstance(settings, dict):
         raise ValueError(tr('ui_6000e7352080'))
     name = 'DFIntTaskSchedulerTargetFps'
+    if fps is None and name not in settings:
+        return tr('ui_70324a0ecc02')
     if fps is None:
         settings.pop(name, None)
     else:

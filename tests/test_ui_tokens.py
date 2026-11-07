@@ -29,3 +29,28 @@ with tempfile.TemporaryDirectory() as folder:
     assert ui_preferences.load()==data
     assert not list(ui_preferences.location().parent.glob('*.tmp'))
 print('PASS AA text token pairs and isolated UI preferences.')
+
+# UI services preserve the existing file semantics when moved out of Tk callbacks.
+import json
+from unittest.mock import MagicMock,patch
+import ui_services
+with tempfile.TemporaryDirectory() as folder:
+    root=Path(folder)/'version-fixture';root.mkdir()
+    exe=root/'RobloxPlayerBeta.exe';exe.write_bytes(b'fixture-not-executed')
+    target=root/'ClientSettings'/'ClientAppSettings.json';target.parent.mkdir()
+    target.write_text(json.dumps({'unrelated':7}))
+    registry=MagicMock();registry.QueryValueEx.return_value=('"'+str(exe)+'",0',1)
+    with patch.dict(sys.modules,{'winreg':registry}):
+        ui_services.change_fps(10)
+        assert json.loads(target.read_text())=={'unrelated':7,'DFIntTaskSchedulerTargetFps':10}
+        ui_services.change_fps(None)
+        assert json.loads(target.read_text())=={'unrelated':7}
+        target.unlink()
+        ui_services.change_fps(None)
+        assert not target.exists(),'Removing absent limit must not create a settings file'
+with tempfile.TemporaryDirectory() as folder:
+    os.environ['LOCALAPPDATA']=folder
+    ui_preferences.save({'theme':'light'},revision=20)
+    ui_preferences.save({'theme':'dark'},revision=10)
+    assert ui_preferences.load()['theme']=='light','Delayed old workers must not overwrite a newer preference'
+print('PASS extracted FPS behavior and preference write ordering.')
