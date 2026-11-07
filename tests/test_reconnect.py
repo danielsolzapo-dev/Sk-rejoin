@@ -79,7 +79,7 @@ with tempfile.TemporaryDirectory() as temp:
      assert len(desktop.tabs.tabs()) == 1
      desktop.show_config()
      desktop.show_optimization()
-     assert desktop.config_sections.index("current") == 0
+     assert desktop.config_sections.index("current") == 3
      assert desktop.opt_fps.get() == "10"
      assert not desktop.start_windows.get()
      assert not desktop.companion_enabled.get()

@@ -722,6 +722,8 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     raise ValueError("Ação do WebLauncher inválida.")
                 return self.reply(200, result)
+            if self.path == "/close":
+                return self.reply(200, execute_unified({"action":"close","payload":value}))
             if self.path == "/auth-check":
                 identity = value.get("id")
                 if type(identity) is not int:
@@ -879,6 +881,8 @@ def main():
     from desktop import Desktop
     import tray
 
+    import theme
+    theme.enable_dpi()
     root = tk.Tk()
     try:
         server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
@@ -904,7 +908,11 @@ def main():
         accounts.write(accounts.ROOT / "tracker-bridge.json", {"port": PORT, "key": TRACKER_KEY})
         root.after(1500, lambda: threading.Thread(target=startup_sequence, daemon=True).start())
         try:
-            desktop.add_tray(tray.attach(root, ASSETS))
+            desktop.add_tray(tray.attach(root, ASSETS, callbacks={
+                "pause":lambda:desktop.run("/rejoin",{"ids":[]}),
+                "reconnect":desktop.reconnect_all,
+                "config":desktop.show_config,"updates":desktop.updates},
+                state=lambda:desktop.state,preferences=lambda:desktop.ui_prefs))
         except ImportError:
             desktop.notice.config(text="Instale as dependências para habilitar a bandeja.")
         try:
@@ -915,4 +923,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
