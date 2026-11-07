@@ -40,7 +40,8 @@ with tempfile.TemporaryDirectory() as folder:
             assert not ui.horizontal.winfo_manager(),'Unnecessary horizontal scrollbar'
             assert not ui.statusbar.winfo_manager()
             assert 'UI preview' not in ui.version_chip.cget('text')
-            assert ui.chip_diagnostic.cget('takefocus')=='1'
+            assert str(ui.chip_diagnostic.cget('takefocus'))=='1'
+            assert ui.chip_diagnostic.winfo_viewable() and ui.chip_update.winfo_viewable()
             assert not any(isinstance(w,tk.Menubutton) for w in ui.compact_panel.winfo_children())
             ui.ui_prefs['destinations']=[1,2,3,4,5,6];ui.render_refinement();root.update()
             assert sum(bool(link.winfo_manager()) for link in ui.recent_links)==5

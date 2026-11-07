@@ -126,6 +126,7 @@ def work_area(root):
 
 def style_button(widget, palette):
     role=getattr(widget,'_sk_role','primary' if getattr(widget,'_sk_primary',False) else 'secondary')
+    widget._sk_role=role
     primary=role=='primary'
     bg=palette['primary'] if primary else widget.master.cget('bg') if role=='discreet' else palette['button']
     fg='#ffffff' if primary else palette['text']

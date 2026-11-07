@@ -112,13 +112,12 @@ for scale in (1.0,1.5):
         root.destroy()
 print('SCREENSHOTS_COMPLETE='+args.label)
 if args.label=='after':
-    names=['before-dark-100-main.png','after-dark-100-main.png','after-light-100-main.png']
-    tiles=[]
-    for name in names:
-        image=Image.open(OUT/name).convert('RGB');image.thumbnail((784,340))
-        tile=Image.new('RGB',(808,380),'#dce3ec');tile.paste(image,(12,28));ImageDraw.Draw(tile).text((12,8),name,fill='#142237');tiles.append(tile)
-    contact=Image.new('RGB',(808,380*len(tiles)),'white')
-    for i,tile in enumerate(tiles):contact.paste(tile,(0,380*i))
+    names=[f'{label}-{mode}-{scale}-main.png' for scale in (100,150) for mode in ('dark','light') for label in ('before','after')]
+    contact=Image.new('RGB',(1616,440*4),'#dce3ec')
+    for i,name in enumerate(names):
+        image=Image.open(OUT/name).convert('RGB');image.thumbnail((784,400))
+        x=(i%2)*808;y=(i//2)*440
+        contact.paste(image,(x+12,y+28));ImageDraw.Draw(contact).text((x+12,y+8),name,fill='#142237')
     contact.save(OUT/'comparison.png')
-    preview=io.BytesIO();contact.save(preview,format='JPEG',quality=75)
-    print('SK_UI_PREVIEW='+base64.b64encode(preview.getvalue()).decode())
+    preview=contact.copy();preview.thumbnail((1200,1400));buffer=io.BytesIO();preview.save(buffer,format='JPEG',quality=80)
+    print('SK_UI_PREVIEW='+base64.b64encode(buffer.getvalue()).decode())
