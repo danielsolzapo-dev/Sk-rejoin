@@ -1,7 +1,7 @@
 name: Rejoin Desk Windows
 on:
   push:
-    branches: [main, compact-ram-0.11.1]
+    branches: [main, add-accounts-0.11.2]
     tags: ['v*']
   workflow_dispatch:
 permissions:
@@ -23,6 +23,7 @@ jobs:
       - run: python tests/test_optimization_block.py
       - run: python tests/test_session_upgrade.py
       - run: python tests/test_unified.py
+      - run: python tests/test_add_accounts.py
       - run: python tests/test_visual.py
       - shell: pwsh
         run: |

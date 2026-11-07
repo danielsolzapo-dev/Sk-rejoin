@@ -92,3 +92,13 @@ Esta atualização reorganiza a interface. Não implementa Refresh Cookie nem al
 A janela principal usa 784 × 301 pixels de área de conteúdo, com linhas de 20 pixels. A lista fica à esquerda e o painel de entrada à direita, como no formato compacto do Roblox Account Manager. A moldura e a escala de exibição do Windows acrescentam dimensões externas.
 
 Perfil/reconexão e Configurações abrem em janelas separadas, preservando o tamanho da janela principal. Busca e filtros ficam em Utilitários > Buscar / filtrar (Ctrl+F). Servidor e tentativas podem ser exibidos pelo mesmo menu. O APP continua redimensionável.
+
+## Versão 0.11.2 — Adicionar contas
+
+O botão Adicionar conta abre o login manual. A seta ao lado oferece Login manual, Nick e senha (User:Pass) e Cookies. Não há opção Custom. O menu pertence ao próprio botão da seta para postagem correta no Tk/Windows.
+
+Login manual abre um navegador isolado em www.roblox.com/login. Entre na conta e conclua as verificações solicitadas. A sessão só é salva depois de ser validada pelo Roblox. Usa Chrome e tenta Edge se o Chrome não abrir.
+
+User:Pass permite preencher até 6 contas ou colar nick:senha, uma por linha. Senhas que contêm dois-pontos são preservadas. Até 3 janelas são abertas em paralelo. Os campos são limpos ao iniciar ou fechar a importação. Cookies mantém a importação existente, uma sessão por linha.
+
+A captura usa apenas a sessão do contexto de login aberto pelo APP e o User-Agent desse navegador. A sessão continua protegida pelo Windows no PC local. Nenhum cookie é enviado ao Tracker.

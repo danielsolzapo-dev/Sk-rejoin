@@ -94,12 +94,19 @@ class Desktop:
         self.notice.pack(before=self.tabs, side="bottom", fill="x", pady=(2, 0))
         self.toolbar = toolbar = tk.Frame(sessions, bg=BG)
         toolbar.pack(side="bottom", fill="x", pady=(3, 0))
-        add_menu = tk.Menu(toolbar, tearoff=False, bg=PANEL, fg=TEXT)
-        add_menu.add_command(label="Nick e senha", command=self.password_dialog)
-        add_menu.add_command(label="Importar cookies", command=self.import_dialog)
-        add = tk.Menubutton(toolbar, text="Adicionar conta ▾", menu=add_menu, bg="#414141", fg=TEXT,
-                            activebackground="#555555", activeforeground=TEXT, relief="raised", bd=1, padx=6, pady=2, cursor="hand2")
-        add.pack(side="left", padx=(0, 5))
+        add_group = tk.Frame(toolbar, bg=BG)
+        add_group.pack(side="left", padx=(0, 5))
+        self.add_button = self.button(add_group, "Adicionar conta", self.manual_dialog)
+        self.add_button.pack(side="left")
+        self.add_arrow = tk.Menubutton(add_group, text="▾", bg="#414141", fg=TEXT,
+                                      activebackground="#555555", activeforeground=TEXT,
+                                      relief="raised", bd=1, padx=5, pady=2, cursor="hand2", direction="above")
+        self.add_arrow.pack(side="left")
+        self.add_menu = tk.Menu(self.add_arrow, tearoff=False, bg=PANEL, fg=TEXT)
+        self.add_menu.add_command(label="Login manual", command=self.manual_dialog)
+        self.add_menu.add_command(label="Nick e senha (User:Pass)", command=self.password_dialog)
+        self.add_menu.add_command(label="Cookies", command=self.import_dialog)
+        self.add_arrow.configure(menu=self.add_menu)
         for title, action in (("Remover", self.remove), ("Selecionar todas", self.select_all),
                               ("Detalhes", self.connection_details)):
             self.button(toolbar, title, action).pack(side="left", padx=(0, 5))
@@ -885,19 +892,64 @@ class Desktop:
             field.pack(fill="both", expand=True)
         self.run("/history", {}, show)
 
+    def manual_dialog(self):
+        import asyncio
+        import browser_login
+        if self.pending:
+            self.notice.config(text="Aguarde a operação atual.")
+            return
+        body = self.dialog("Adicionar conta — Login manual")
+        window = body.winfo_toplevel()
+        self.label(body, "Entre na sua conta na janela oficial do Roblox que será aberta.",
+                   wrap=580).pack(anchor="w", pady=6)
+        self.label(body, "Conclua a verificação em duas etapas ou o desafio na janela do navegador, se solicitado.",
+                   color=MUTED, wrap=580).pack(anchor="w", pady=6)
+        status = self.label(body, "Abrindo navegador…", color=MINT, wrap=580)
+        status.pack(anchor="w", pady=12)
+        cancel = Event()
+        self.pending = True
+        def report(name, message):
+            if status.winfo_exists():
+                status.config(text=message)
+        def finished(value, error):
+            self.pending = False
+            if status.winfo_exists() and error:
+                status.config(text=error)
+            if not error:
+                self.refresh()
+        def worker():
+            error = None
+            try:
+                asyncio.run(browser_login.import_batch([(None, None)], cancel,
+                    lambda name, message: self.events.put((report, name, message))))
+            except Exception:
+                error = "Não foi possível abrir o login. Confira se Chrome ou Edge está instalado."
+            self.events.put((finished, None, error))
+        def close():
+            cancel.set()
+            window.destroy()
+        self.button(body, "Cancelar", close).pack(anchor="w", pady=8)
+        window.protocol("WM_DELETE_WINDOW", close)
+        Thread(target=worker, daemon=True).start()
+
     def password_dialog(self):
         import asyncio
         import accounts
         import browser_login
-
         body = self.dialog("Adicionar por nick e senha")
         window = body.winfo_toplevel()
-        window.geometry("700x500")
-        self.label(body, "Preencha até 6 contas. O app abre até 3 janelas do Chrome por vez.",
+        window.geometry("700x530")
+        self.label(body, "Até 6 contas. Serão abertas até 3 janelas de login por vez.",
                    color=MUTED, wrap=640).pack(anchor="w")
+        modes = ttk.Notebook(body)
+        modes.pack(fill="x", pady=8)
+        fields_page = tk.Frame(modes, bg=PANEL)
+        paste_page = tk.Frame(modes, bg=PANEL)
+        modes.add(fields_page, text="Preencher contas")
+        modes.add(paste_page, text="User:Pass em lote")
         fields = []
         for _ in range(6):
-            row = tk.Frame(body, bg=PANEL)
+            row = tk.Frame(fields_page, bg=PANEL)
             row.pack(fill="x", pady=3)
             self.label(row, "Nick").pack(side="left", padx=5)
             nick = self.entry(row)
@@ -907,61 +959,66 @@ class Desktop:
             password.config(show="•")
             password.pack(side="left", fill="x", expand=True, ipady=3)
             fields.append((nick, password))
+        self.label(paste_page, "Cole uma conta por linha no formato nick:senha.", color=MUTED).pack(anchor="w", pady=6)
+        pasted = tk.Text(paste_page, bg=BG, fg=TEXT, insertbackground=TEXT, height=8, wrap="none")
+        pasted.pack(fill="x")
         status = self.label(body, "", color=MINT, wrap=640)
         status.pack(anchor="w", pady=8)
         cancel = Event()
         messages = {}
-
         def report(nick, message):
             if status.winfo_exists():
                 messages[nick] = message
                 status.config(text="\n".join(f"{name} · {text}" for name, text in messages.items()))
-
         def submit():
             if self.pending:
                 status.config(text="Aguarde a operação atual.")
                 return
-            rows = [(nick.get().strip(), password.get()) for nick, password in fields]
-            credentials = [(nick, password) for nick, password in rows if nick or password]
-            if not credentials or any(not accounts.USERNAME.fullmatch(nick) or not password for nick, password in credentials):
-                status.config(text="Preencha um nick válido e a senha em cada linha usada.")
+            if modes.index("current") == 1:
+                try:
+                    credentials = browser_login.parse_credentials(pasted.get("1.0", "end-1c"))
+                except ValueError as error:
+                    status.config(text=str(error))
+                    return
+            else:
+                credentials = [(nick.get().strip(), password.get()) for nick, password in fields if nick.get().strip() or password.get()]
+            if not credentials or len(credentials) > 6 or any(not accounts.USERNAME.fullmatch(nick) or not password for nick, password in credentials):
+                status.config(text="Preencha de 1 a 6 contas com nick válido e senha.")
                 return
             if len({nick.casefold() for nick, _ in credentials}) != len(credentials):
                 status.config(text="Cada nick deve aparecer uma vez.")
                 return
             for _, password in fields:
                 password.delete(0, "end")
+            pasted.delete("1.0", "end")
             self.pending = True
             start.config(state="disabled")
             messages.clear()
             status.config(text="Iniciando o lote…")
-
             def worker():
+                error = None
                 try:
                     asyncio.run(browser_login.import_batch(credentials, cancel,
                         lambda nick, message: self.events.put((report, nick, message))))
-                    error = None
-                except ValueError as exc:
-                    error = str(exc)
                 except Exception:
-                    error = "Falha ao iniciar o login pelo Chrome."
+                    error = "Falha ao iniciar o login. Confira Chrome ou Edge."
                 self.events.put((finished, None, error))
-
             def finished(_, error):
                 self.pending = False
                 if status.winfo_exists():
                     start.config(state="normal")
                     if error:
                         status.config(text=error)
-
+                if not error:
+                    self.refresh()
             Thread(target=worker, daemon=True).start()
-
         start = self.button(body, "Entrar e adicionar contas", submit, True)
         start.pack(anchor="w")
         def close():
             cancel.set()
+            pasted.delete("1.0", "end")
+            for _, password in fields:
+                password.delete(0, "end")
             window.destroy()
         window.protocol("WM_DELETE_WINDOW", close)
-
-
 
