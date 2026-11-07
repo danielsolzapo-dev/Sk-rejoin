@@ -60,3 +60,9 @@ Em Config > Inicialização, configure Rejoin → WebLauncher → Executor → C
 Selecione as contas na aba Contas, salve seus perfis com Place ID e depois use Usar contas selecionadas na aba Contas, dentro de Config > Inicialização. Marque Abrir contas selecionadas, salve e use Testar sequência salva. A sequência é executada a cada abertura do Rejoin. Contas já vinculadas ou com heartbeat recente são ignoradas.
 
 Iniciar com Windows registra o Rejoin para seu usuário. A ordem é garantida dentro da sequência do Rejoin; o Windows agenda outros programas de inicialização independentemente. Uma etapa que falha interrompe a sequência e informa o motivo no painel e no histórico. Cancelar sequência interrompe as esperas; Cancelar fila interrompe aberturas de contas já enviadas. Nenhuma elevação de privilégios adicional é aplicada.
+
+## Versão 0.9.0 — Revamp visual
+
+Nova navegação lateral, cabeçalho compacto com a arte SK, indicadores maiores e tabela com linhas alternadas. Busca por nick/ID e filtros por estado só mudam a visualização. Linhas escondidas pelos filtros são removidas da seleção para impedir ações em contas ocultas. Duplo clique abre os detalhes da conexão.
+
+Abrir e Reconectar ficam no topo do painel de execução. Há barra horizontal na tabela e rolagem nos diálogos. A janela inicial respeita o tamanho do monitor. Todas as configurações, perfis, sessões e inicialização existentes são preservadas. Nenhuma mudança na rotina de abertura, BLOCK ACC ou reconexão nesta versão.
