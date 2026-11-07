@@ -2,6 +2,7 @@
 from ui_text import tr
 import json
 import os
+import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import accounts
@@ -685,6 +686,9 @@ class Desktop(WorkspaceUI):
 
     def toggle_compact(self):
         self.compact = not self.compact
+        if hasattr(self,'banner') and self.compact and not self.removal_timer:self.banner.pack_forget()
+        if hasattr(self,'ui_prefs'):
+            self.ui_prefs['compact']=self.compact;self.persist_ui()
         ttk.Style(self.root).configure(tr('ui_d78dca84fb22'), rowheight=20 if self.compact else 28)
 
     def set_list_columns(self):
@@ -844,6 +848,7 @@ class Desktop(WorkspaceUI):
 
         def checked(value, error):
             self.pending = False
+            self.last_check=time.strftime('%H:%M')
             if error:
                 self.notice.config(text=tr('ui_948fd9776678', p0=error))
             elif value['newer'] and value['installable']:

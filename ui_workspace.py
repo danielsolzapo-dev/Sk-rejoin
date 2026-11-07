@@ -57,7 +57,12 @@ class WorkspaceUI:
         self.footer_selection=self.label(self.metrics[0].master,'0 selecionadas',size=8,color=self.palette['muted'])
         self.footer_selection.pack(side='right')
         self.place.bind('<Down>',self.destination_history)
-        self.last_check = '—' 
+        for button in (self.open_button,self.reconnect_button):
+            self.install_tooltip(button,lambda b=button:getattr(b,'_sk_reason','') or b.cget('text'))
+        self.install_tooltip(self.place,'Place ID numérico. Pressione ↓ para ver destinos recentes.')
+        for variable in (self.start_windows,self.companion_enabled,self.start_weblauncher,self.start_accounts):
+            variable.trace_add('write',lambda *args:setattr(self,'ui_config_dirty',True))
+        self.last_check = '—'  
         self.icons = {}
         self.table.configure(show="tree headings")
         self.table.column("#0",width=round(24*self.ui_scale),stretch=False,minwidth=20)
@@ -84,6 +89,8 @@ class WorkspaceUI:
             if col in self.table['columns'] and type(width) is int and (45 <= width <= 1200):
                 self.table.column(col, width=width)
         self.validate_destination()
+        if not prefs.get('onboarded') and not self.rows:
+            self.show_banner('Prepare sua primeira conta em quatro passos.',self.first_run,'Começar')
         self.root.after(10000, self.poll_windows_theme)
 
     def poll_windows_theme(self):
@@ -401,3 +408,22 @@ class WorkspaceUI:
         menu.tk_popup(self.place.winfo_rootx(),self.place.winfo_rooty()+self.place.winfo_height())
         menu.grab_release()
         return 'break'
+
+    def install_tooltip(self,widget,text):
+        def enter(event):
+            self.hide_tooltip()
+            def show():
+                value=text() if callable(text) else text
+                if not value:return
+                self.tip=tk.Toplevel(self.root);self.tip.overrideredirect(True)
+                self.tip.geometry(f'+{event.x_root+12}+{event.y_root+14}')
+                tk.Label(self.tip,text=value,bg=self.palette['surface'],fg=self.palette['text'],padx=8,pady=6,wraplength=300,justify='left').pack()
+            self.tip_after=self.root.after(500,show)
+        widget.bind('<Enter>',enter,add='+');widget.bind('<Leave>',lambda event:self.hide_tooltip(),add='+')
+
+    def presentation_error(self,code):
+        return {279:'Conexão com o servidor falhou. Confira a rede e tente novamente.',
+                773:'A troca de servidor falhou. Consulte os detalhes da conexão.',
+                403:'Autenticação recusada. Abra o diagnóstico para conferir a etapa.',
+                415:'Formato da requisição recusado. Confira a versão do APP.',
+                429:'Muitas solicitações. Aguarde antes de tentar novamente.'}.get(code,'')

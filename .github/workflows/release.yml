@@ -57,7 +57,8 @@ jobs:
 
   screenshots:
     needs: build
-    if: startsWith(github.ref_name, 'ui/') && !contains(github.event.head_commit.message, 'docs(ui): capture')
+    if: >-
+      startsWith(github.ref_name, 'ui/') && !contains(github.event.head_commit.message, 'docs(ui): capture')
     runs-on: windows-latest
     permissions:
       contents: write
