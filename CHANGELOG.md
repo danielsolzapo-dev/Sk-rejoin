@@ -5,6 +5,7 @@
 - Colunas medidas pelo conteúdo, Estado flexível, rolagem horizontal condicional e larguras manuais isoladas por usuário.
 - Rodapé com duas linhas, resumo pluralizado, mensagens transitórias e chips de diagnóstico/atualização com foco de teclado.
 - Hierarquia única de botões; painel sem duplicação dos menus Utilitários/Configurações.
+- Ícones rasterizados da mesma geometria em 16/20/24/32 px.
 - Estados verde/azul/âmbar/cinza/vermelho, inclusive seleção; bordas claras de 1px, cabeçalho SK discreto, etapa observada e cinco destinos recentes.
 - Smoke de composição em escalas Tk 100/125/150/200 e comparação antes/depois claro/escuro em 100/150. DPI físico e múltiplos monitores permanecem verificações manuais.
 - Nenhuma alteração em autenticação, heartbeat, reconexão, BLOCK ACC ou atualizador.

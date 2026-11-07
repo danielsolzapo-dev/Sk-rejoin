@@ -61,6 +61,9 @@ def apply(root, palette, scale=1.0):
                     relief='flat', padding=(6, 4), font=(FONT, 9, 'bold'))
     style.map('Treeview', background=[('selected',palette['selection'])], foreground=[])
     style.configure('TNotebook', background=palette['bg'], borderwidth=0)
+    # The single-page workspace has no decorative notebook frame.
+    style.configure('Workspace.TNotebook',background=palette['bg'],borderwidth=0,
+                    bordercolor=palette['bg'],lightcolor=palette['bg'],darkcolor=palette['bg'])
     style.configure('TNotebook.Tab', background=palette['button'], foreground=palette['text'], padding=(12, 6))
     style.map('TNotebook.Tab', background=[('selected',palette['selection'])], foreground=[('selected',palette['text'])])
     style.configure('TCombobox', fieldbackground=palette['field'], background=palette['button'],
