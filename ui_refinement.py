@@ -101,8 +101,10 @@ class RefinedUI:
         self.progress_panel.grid(row=6, column=0, sticky='ew', pady=(4, 2))
         self.progress_title = tk.Label(self.progress_panel, text=tr('ref_stage'), font=(theme.FONT, 8), anchor='w')
         self.progress_title.pack(fill='x')
-        self.progress_text = tk.Label(self.progress_panel, font=(theme.FONT, 8), anchor='w', justify='left', wraplength=220)
+        self.progress_text = tk.Label(self.progress_panel, font=(theme.FONT, 8), anchor='w', justify='left', wraplength=round(220*self.ui_scale))
         self.progress_text.pack(fill='x')
+        self.progress_panel.bind('<Configure>',lambda event:self.progress_text.config(wraplength=max(1,event.width-2)))
+        self.current_account.config(wraplength=round(220*self.ui_scale))
         self.profile_button.grid(row=7, column=0, sticky='ew', pady=(3, 0))
         self.recent_panel = tk.Frame(self.compact_panel)
         self.recent_panel.grid(row=9, column=0, sticky='nsew', pady=(4, 0))
@@ -197,6 +199,8 @@ class RefinedUI:
         if 'status' in widths:
             other=sum(width for name,width in widths.items() if name!='status')
             widths['status']=max(round(heading.measure(self.table.heading('status','text'))+16*self.ui_scale),available-other)
+        for column in columns:
+            self.table.column(column,minwidth=1,stretch=False)
         for column,width in widths.items():
             self.table.column(column,width=width,minwidth=width,stretch=column=='status')
         self.root.after_idle(self.update_horizontal)
@@ -207,7 +211,9 @@ class RefinedUI:
 
     def update_horizontal(self, first=None, last=None):
         if first is None: first,last=self.table.xview()
-        if first<=0.001 and last>=0.999:
+        total=self.table.column('#0','width')+sum(self.table.column(col,'width') for col in self.table['displaycolumns'])
+        fits=total<=self.table.winfo_width()+2
+        if fits or (first<=0.001 and last>=0.999):
             if self.horizontal.winfo_manager():self.horizontal.pack_forget()
         elif not self.horizontal.winfo_manager():
             self.horizontal.pack(side='bottom',fill='x')

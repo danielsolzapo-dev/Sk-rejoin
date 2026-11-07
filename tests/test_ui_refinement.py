@@ -37,6 +37,7 @@ with tempfile.TemporaryDirectory() as folder:
             state={'accounts':rows,'waiting':0,'busy':False,'version':'0.12.0 UI preview','multi':'fixture','rejoin':100,'startupStatus':''}
             ui.refresh_done(state,None);ui.apply_theme(mode);root.update();ui.fit_columns();root.update()
             assert len(ui.table.get_children())==100
+            print('FIT',scale,mode,ui.table.winfo_width(),ui.table.xview(),{col:ui.table.column(col) for col in ('#0',*ui.table['displaycolumns'])})
             assert not ui.horizontal.winfo_manager(),'Unnecessary horizontal scrollbar'
             assert not ui.statusbar.winfo_manager()
             assert 'UI preview' not in ui.version_chip.cget('text')
