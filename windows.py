@@ -5,7 +5,7 @@ import time
 from ctypes import wintypes as w
 
 
-def running():
+def running(names=None):
     if os.name != "nt":
         raise ValueError("A fila de janelas requer Windows.")
     kernel = c.WinDLL("kernel32", use_last_error=True)
@@ -33,7 +33,7 @@ def running():
             raise ValueError("Windows não retornou a lista de processos.")
         result = set()
         while True:
-            if entry.exe.lower() in ("robloxplayerbeta.exe", "windows10universal.exe"):
+            if names is None and entry.exe.lower() in ("robloxplayerbeta.exe", "windows10universal.exe") or names is not None and entry.exe.lower() in names:
                 result.add(entry.pid)
             if not next_entry(handle, c.byref(entry)):
                 return result
@@ -101,3 +101,47 @@ def same_process(pid, created):
     except (ValueError, OSError):
         # Unknown permissions must not admit a duplicate instance.
         return True
+
+
+def executable_running(path):
+    from pathlib import Path
+    kernel = c.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.argtypes, kernel.OpenProcess.restype = [w.DWORD, w.BOOL, w.DWORD], w.HANDLE
+    kernel.QueryFullProcessImageNameW.argtypes = [w.HANDLE, w.DWORD, w.LPWSTR, c.POINTER(w.DWORD)]
+    kernel.QueryFullProcessImageNameW.restype = w.BOOL
+    kernel.CloseHandle.argtypes, kernel.CloseHandle.restype = [w.HANDLE], w.BOOL
+    for pid in running({Path(path).name.lower()}):
+        handle = kernel.OpenProcess(0x1000, False, pid)
+        if not handle:
+            continue
+        try:
+            buffer = c.create_unicode_buffer(32768)
+            size = w.DWORD(len(buffer))
+            if kernel.QueryFullProcessImageNameW(handle, 0, buffer, c.byref(size)) and os.path.normcase(buffer.value) == os.path.normcase(path):
+                return True
+        finally:
+            kernel.CloseHandle(handle)
+    return False
+
+
+def close_bound(pid, created):
+    """Terminate only a Roblox process with the expected creation timestamp."""
+    if pid not in running() or process_stamp(pid) != created:
+        raise ValueError("O processo mudou. Nenhuma janela foi fechada.")
+    kernel = c.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.argtypes, kernel.OpenProcess.restype = [w.DWORD, w.BOOL, w.DWORD], w.HANDLE
+    kernel.GetProcessTimes.argtypes = [w.HANDLE] + [c.POINTER(w.FILETIME)] * 4
+    kernel.GetProcessTimes.restype = w.BOOL
+    kernel.TerminateProcess.argtypes, kernel.TerminateProcess.restype = [w.HANDLE, w.UINT], w.BOOL
+    kernel.CloseHandle.argtypes, kernel.CloseHandle.restype = [w.HANDLE], w.BOOL
+    handle = kernel.OpenProcess(0x1001, False, pid)
+    if not handle:
+        raise ValueError("Sem permissão para reiniciar esta janela do Roblox.")
+    try:
+        times = [w.FILETIME() for _ in range(4)]
+        if not kernel.GetProcessTimes(handle, *(c.byref(t) for t in times)) or (times[0].dwHighDateTime << 32 | times[0].dwLowDateTime) != created:
+            raise ValueError("A identidade do processo mudou.")
+        if not kernel.TerminateProcess(handle, 0):
+            raise ValueError("O Windows não encerrou esta janela.")
+    finally:
+        kernel.CloseHandle(handle)

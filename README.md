@@ -40,3 +40,15 @@ Abra o SK Rejoin antes do Roblox para reservar o modo multi-instância. Configur
 Em Heartbeat, copie o coletor para cada cliente com HTTP local. Após uma nova abertura, o coletor precisa executar novamente para confirmar a conta. O limite de FPS usa ClientAppSettings e aplica na próxima abertura do Roblox. A compatibilidade depende do cliente instalado.
 
 O GitHub Actions compila e publica a versão declarada em update.py. Testes de reconexão e API usam processos simulados. Valide abertura, permissões e multi-instância nos seus PCs Windows.
+
+
+
+## Versão 0.8.0
+
+- Config > Inicialização: iniciar o .exe ao entrar no Windows e abrir um aplicativo adicional escolhido por arquivo. Salve as opções e mantenha o Rejoin em uma pasta fixa. Não grava senha do Windows. Um aplicativo adicional já aberto é reconhecido pelo caminho.
+- Contas > Salvar perfil selecionadas: destino, dimensões, FPS, tempo sem sinal e tentativas. O FPS individual depende de setfpscap disponível no ambiente do coletor.
+- Reconectar selecionadas encerra somente o PID/tempo de criação vinculado e abre a conta novamente. Sem vínculo seguro, a operação informa que a janela precisa ser fechada manualmente.
+- Recuperação automática dos erros 279/773 requer reconexão ativada e Heartbeat atualizado que consiga ler o diálogo do Roblox. Falhas antes de o coletor executar não têm código identificado por este mecanismo. Mantém teto de tentativas e espera progressiva.
+- Detalhes da conexão mostra servidor atual, conflito, destino e espera do BLOCK ACC.
+- Tracker 3.19.0: na aba Gerenciador, estados do SK Rejoin e pedidos de rejoin local ou remoto. Execute ambos no mesmo usuário Windows em cada PC e atualize os agentes. O acesso de controle usa chave local de sessão separada, limitada a estado e rejoin; cookies e senhas não são enviados ao Tracker. Pedidos remotos expiram e não são repetidos após uma tentativa de execução.
+- Substitua o Heartbeat no Auto Execute após atualizar.

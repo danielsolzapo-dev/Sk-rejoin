@@ -82,6 +82,10 @@ with tempfile.TemporaryDirectory() as temp:
      desktop.show_optimization()
      assert desktop.config_sections.index("current") == 0
      assert desktop.opt_fps.get() == "10"
+     assert not desktop.start_windows.get()
+     assert not desktop.companion_enabled.get()
+     assert desktop.profile_fps.get() == "10"
+     desktop.connection_details()
      window.update_idletasks()
      desktop.tabs.select(0)
      desktop.toggle_compact()

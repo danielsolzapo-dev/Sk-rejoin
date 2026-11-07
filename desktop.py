@@ -138,7 +138,11 @@ class Desktop:
             entry.insert(0, settings.get(key, default))
             entry.pack(side="right", ipady=3)
             self.dimensions[key] = entry
-        for title, action in (("Abrir selecionadas", self.launch), ("Cancelar fila", lambda: self.run("/cancel", {})), ("Ativar reconexão", self.rejoin), ("Pausar selecionadas", lambda: self.action("/pause")), ("Selecionar todas", self.select_all), ("Remover selecionadas", self.remove)):
+        self.label(sidebar, "FPS por conta (requer suporte do coletor)", color=MUTED, wrap=222).pack(anchor="w", pady=(8, 0))
+        self.profile_fps = self.entry(sidebar)
+        self.profile_fps.insert(0, "10")
+        self.profile_fps.pack(fill="x", ipady=3)
+        for title, action in (("Abrir selecionadas", self.launch), ("Reconectar selecionadas", lambda: self.action("/reconnect")), ("Salvar perfil selecionadas", self.save_selected_profile), ("Detalhes da conexão", self.connection_details), ("Cancelar fila", lambda: self.run("/cancel", {})), ("Ativar reconexão", self.rejoin), ("Pausar selecionadas", lambda: self.action("/pause")), ("Selecionar todas", self.select_all), ("Remover selecionadas", self.remove)):
             self.button(sidebar, title, action, title == "Abrir selecionadas").pack(fill="x", pady=(7, 0))
         self.rejoin_status = self.label(sidebar, "", color=MUTED, wrap=222)
         self.rejoin_status.pack(anchor="w", pady=(12, 0))
@@ -171,6 +175,8 @@ class Desktop:
             return body
         performance = scroll_page("Desempenho e BLOCK ACC")
         launchers = scroll_page("WebLauncher")
+        boot = scroll_page("Inicialização")
+        self.build_startup(boot, settings)
         panel = tk.Frame(performance, bg=PANEL, padx=20, pady=16)
         panel.pack(fill="x", padx=18, pady=12)
         self.label(panel, "Otimizar para economizar recursos", size=15, bold=True).pack(anchor="w")
@@ -200,8 +206,8 @@ class Desktop:
                        command=self.save_block_acc, bg=PANEL, fg=TEXT, selectcolor=BG,
                        activebackground=PANEL, activeforeground=TEXT).pack(anchor="w", pady=8)
         self.label(block, "Vale para as contas acompanhadas neste app e PC. Use o novo heartbeat no Auto Execute. "
-                   "Se uma colisão for detectada, o coletor solicita outro servidor. Sem destino disponível, "
-                   "a conta duplicada é desconectada para interromper a disputa.", color=MUTED, wrap=650).pack(anchor="w")
+                   "Após carregar e aguardar 10 segundos, o coletor solicita outro servidor em caso de colisão. "
+                   "Se falhar, tenta novamente após uma pausa. Confira os detalhes na aba Contas.", color=MUTED, wrap=650).pack(anchor="w")
         box = tk.Frame(launchers, bg=PANEL, padx=20, pady=18)
         box.pack(fill="x", padx=22, pady=15)
         self.label(box, "Multi Roblox", size=16, bold=True).pack(anchor="w")
@@ -358,7 +364,7 @@ class Desktop:
             for identity in self.rows.keys() - rows.keys():
                 self.table.delete(identity)
             for identity, row in rows.items():
-                values = (row["username"], row["status"], "—" if row["age"] is None else f'{row["age"]} s',
+                values = (row["username"], row.get("connection", "") + (" · " if row.get("connection") else "") + row["status"], "—" if row["age"] is None else f'{row["age"]} s',
                           '—' if row.get('connected') is None else f'{row["connected"]//60} min',
                           ('Pausada' if not row.get('rejoin') else f'{row["attempts"]}/{row["maxAttempts"]}' +
                            (' · limite atingido' if row['attempts'] >= row['maxAttempts'] else ' · aguardando sinal' if row.get('nextIn') is None else f' · {row["nextIn"]}s')),
@@ -401,13 +407,71 @@ class Desktop:
             except ValueError:
                 self.notice.config(text="Informe entre 10 e 3600 segundos sem sinal.")
                 return
-        if path == "/launch":
+        if path in ("/launch", "/reconnect"):
             try:
                 payload.update({key: int(field.get()) for key, field in self.dimensions.items()})
             except ValueError:
                 self.notice.config(text="Informe dimensões e limite em números inteiros.")
                 return
         self.run(path, payload)
+
+    def build_startup(self, host, settings):
+        panel = tk.Frame(host, bg=PANEL, padx=20, pady=18)
+        panel.pack(fill="x", padx=18, pady=12)
+        self.label(panel, "Inicialização do SK Rejoin", size=16, bold=True).pack(anchor="w")
+        self.start_windows = tk.BooleanVar(value=bool(settings.get("startWithWindows")))
+        self.companion_enabled = tk.BooleanVar(value=bool(settings.get("companionEnabled")))
+        for text, variable in (("Iniciar SK Rejoin ao entrar no Windows", self.start_windows),
+                               ("Abrir o aplicativo escolhido junto com o Rejoin", self.companion_enabled)):
+            tk.Checkbutton(panel, text=text, variable=variable, bg=PANEL, fg=TEXT, selectcolor=BG,
+                           activebackground=PANEL, activeforeground=TEXT).pack(anchor="w", pady=8)
+        self.companion_path = self.entry(panel)
+        self.companion_path.insert(0, settings.get("companionPath", ""))
+        self.companion_path.pack(fill="x", pady=6)
+        self.button(panel, "Selecionar aplicativo (.exe)", self.choose_companion).pack(anchor="w", pady=5)
+        self.button(panel, "Salvar inicialização", self.save_startup, True).pack(anchor="w", pady=5)
+        self.button(panel, "Abrir aplicativo agora", lambda: self.run("/startup", {"action": "open"}, lambda v: self.notice.config(text=v["message"]))).pack(anchor="w", pady=5)
+        self.label(panel, "A inicialização vale para seu usuário do Windows. Mantenha o Rejoin em uma pasta fixa. "
+                   "O aplicativo adicional é aberto como programa independente, sem login ou injeção pelo Rejoin.",
+                   color=MUTED, wrap=700).pack(anchor="w", pady=10)
+
+    def choose_companion(self):
+        path = filedialog.askopenfilename(parent=self.root, title="Aplicativo para abrir com o SK Rejoin", filetypes=[("Aplicativo Windows", "*.exe")])
+        if path:
+            self.companion_path.delete(0, "end")
+            self.companion_path.insert(0, path)
+
+    def save_startup(self):
+        self.run("/startup", {"startWithWindows": self.start_windows.get(), "companionEnabled": self.companion_enabled.get(),
+                             "companionPath": self.companion_path.get().strip()}, lambda v: self.notice.config(text=v["message"]))
+
+    def save_selected_profile(self):
+        try:
+            payload = {"ids": self.ids(), "place": int(self.place.get()), "delay": int(self.rejoin_delay.get()),
+                       "max_attempts": int(self.max_attempts.get()), "fps": int(self.profile_fps.get())}
+            payload.update({k: int(self.dimensions[k].get()) for k in ("width", "height")})
+        except ValueError:
+            self.notice.config(text="Preencha o perfil com números inteiros.")
+            return
+        self.run("/profile", payload, lambda v: self.notice.config(text=v["message"]))
+
+    def connection_details(self):
+        selected = [self.rows.get(str(i), {}) for i in self.ids()]
+        if not selected:
+            self.notice.config(text="Selecione uma conta para consultar os detalhes.")
+            return
+        body = self.dialog("Conexão e BLOCK ACC")
+        text = tk.Text(body, bg=BG, fg=TEXT, width=75, height=22, wrap="word")
+        text.pack(fill="both", expand=True)
+        for row in selected:
+            diag = row.get("block", {})
+            other = self.rows.get(str(diag.get("conflictUserId")), {}).get("username", "—")
+            text.insert("end", f'{row.get("username")}\n{row.get("connection", "—")} · {row.get("status")}\n'
+                        f'Servidor atual: {row.get("jobId") or "Não informado"}\n'
+                        f'Conflito com: {other}\nDestino: {diag.get("target") or "Aguardando destino"}\n'
+                        f'Próxima tentativa BLOCK ACC: {diag.get("nextIn", 0)} s\n'
+                        f'FPS por conta: {"suportado" if row.get("fpsSupported") else "aguardando suporte do coletor"}\n\n')
+        text.config(state="disabled")
 
     def toggle_compact(self):
         self.compact = not self.compact
@@ -423,7 +487,7 @@ class Desktop:
             return
         row = self.rows.get(str(ids[0]), {})
         profile = row.get("profile", {})
-        for key, field in (("place", self.place), ("delay", self.rejoin_delay), ("max_attempts", self.max_attempts)):
+        for key, field in (("place", self.place), ("delay", self.rejoin_delay), ("max_attempts", self.max_attempts), ("fps", self.profile_fps), ("width", self.dimensions["width"]), ("height", self.dimensions["height"])):
             if key in profile:
                 field.delete(0, "end")
                 field.insert(0, str(profile[key]))

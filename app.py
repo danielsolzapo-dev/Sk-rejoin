@@ -14,11 +14,13 @@ import windows
 import bootstrapper
 import optimization
 import server_picker
+import startup
 
 ASSETS = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
 KEY = accounts.read(accounts.ROOT / "heartbeat-key.json", None) or secrets.token_urlsafe(32)
 accounts.write(accounts.ROOT / "heartbeat-key.json", KEY)
 ADMIN = secrets.token_urlsafe(32)
+TRACKER_KEY = secrets.token_urlsafe(32)
 LOCK = threading.RLock()
 LIVE = {}
 STATUS = {}
@@ -56,7 +58,16 @@ def public_state():
             if policy and beat:
                 if policy["attempts"] < policy["max_attempts"]:
                     next_in = max(0, round(max(beat["received"] + policy["delay"], policy["next"]) - now))
-            row.update(jobId=beat.get("jobId", "") if beat else "", status=status, age=age, place=beat["place"] if beat else None,
+            binding = BINDINGS.get(identity)
+            process_open = bool(binding and windows.same_process(*binding))
+            if beat and age < 20:
+                connection = "Erro " + str(beat["errorCode"]) if beat.get("errorCode") else ("Conectado" if beat.get("readyForBlock") else "Carregando")
+            else:
+                connection = "Roblox aberto · sem sinal" if process_open else ("Sem sinal" if beat else "Sem sessão")
+            diag = dict(BLOCK_DIAG.get(identity, {}))
+            diag["nextIn"] = max(0, round(diag.pop("next", 0) - now))
+            row.update(connection=connection, processOpen=process_open, block=diag, errorCode=beat.get("errorCode") if beat else None,
+                       fpsSupported=beat.get("fpsSupported") if beat else None, jobId=beat.get("jobId", "") if beat else "", status=status, age=age, place=beat["place"] if beat else None,
                        connected=round(now - beat["since"]) if beat and age < 20 else None,
                        profile=profiles.get(str(identity), {}), rejoin=bool(policy),
                        attempts=policy["attempts"] if policy else 0,
@@ -71,6 +82,7 @@ WAITING = 0
 PROFILES = accounts.ROOT / "sk-account-profiles.json"
 BINDINGS = {}
 SERVER_TARGETS = {}
+BLOCK_DIAG = {}
 
 def record(identity, event):
     with LOCK:
@@ -81,7 +93,7 @@ def record(identity, event):
 def save_profiles():
     profiles = accounts.read(PROFILES, {})
     for identity, policy in REJOIN.items():
-        profiles[str(identity)] = {key: policy[key] for key in ("place", "delay", "max_attempts", "attempts")}
+        profiles.setdefault(str(identity), {}).update({key: policy[key] for key in ("place", "delay", "max_attempts", "attempts")})
         profiles[str(identity)]["enabled"] = True
     accounts.write(PROFILES, profiles)
 
@@ -172,13 +184,22 @@ def collision_action(identity):
                    if other_beat["place"] == beat["place"] and other_beat.get("jobId") == beat["jobId"]
                    and time.monotonic() - other_beat["received"] < 35]
         if len(members) < 2 or min(members)[1] == identity:
+            BLOCK_DIAG.pop(identity, None)
             if STATUS.get(identity, "").startswith("BLOCK ACC"):
                 STATUS[identity] = "Online"
             return {}
+        keeper = min(members)[1]
+        BLOCK_DIAG[identity] = {"conflictUserId": keeper, "current": beat["jobId"],
+                                "target": SERVER_TARGETS.get(identity, {}).get("jobId", ""),
+                                "next": time.monotonic() + max(0, 10 - (time.monotonic() - beat.get("joined", beat["since"])))}
         if not beat.get("readyForBlock") or time.monotonic() - beat.get("joined", beat["since"]) < 10:
             STATUS[identity] = "BLOCK ACC · aguardando jogo carregado e 10 s de conexão"
             return {}
         place = beat["place"]
+        if beat.get("retryIn", 0) > 0:
+            BLOCK_DIAG[identity]["next"] = time.monotonic() + beat["retryIn"]
+            STATUS[identity] = "BLOCK ACC · aguardando próxima tentativa"
+            return {}
         failed = beat.get("failedJobId", "")
         STATUS[identity] = "BLOCK ACC · procurando outro servidor"
     try:
@@ -188,10 +209,12 @@ def collision_action(identity):
                 SERVER_TARGETS.pop(identity, None)
                 return {}
             STATUS[identity] = "BLOCK ACC · troca de servidor solicitada"
+            BLOCK_DIAG[identity].update(target=job, next=time.monotonic() + 15)
         return {"relocate": {"placeId": place, "jobId": job}}
     except (ValueError, OSError):
         with LOCK:
             STATUS[identity] = "BLOCK ACC · aguardando outro servidor para rejoin"
+            BLOCK_DIAG.setdefault(identity, {}).update(next=time.monotonic() + 15)
         return {"retry": True}
 
 
@@ -246,6 +269,24 @@ def start_job(value, *, remember_place=True):
                     break
                 with LOCK:
                     STATUS[identity] = "Na fila"
+                binding = BINDINGS.get(identity)
+                if value.get("recover"):
+                    if binding and windows.same_process(*binding):
+                        windows.close_bound(*binding)
+                        deadline = time.monotonic() + 10
+                        while windows.same_process(*binding) and time.monotonic() < deadline:
+                            if QUEUE_CANCEL.wait(.25):
+                                return
+                        if windows.same_process(*binding):
+                            raise ValueError("A janela anterior ainda está encerrando. Tente novamente.")
+                    elif LIVE.get(identity) and time.monotonic() - LIVE[identity]["received"] < 20 and not binding:
+                        raise ValueError("Conta sem PID vinculado. Feche apenas essa janela e abra pelo SK Rejoin.")
+                    with LOCK:
+                        BINDINGS.pop(identity, None)
+                        LIVE.pop(identity, None)
+                        SERVER_TARGETS.pop(identity, None)
+                        BLOCK_DIAG.pop(identity, None)
+                    record(row["username"], "Rejoin da janela vinculada solicitado")
                 limit = settings["limit"]
                 while len(windows.running()) >= limit:
                     with LOCK:
@@ -294,7 +335,8 @@ def start_job(value, *, remember_place=True):
                         STATUS[identity] = str(error)
                     record(row["username"], str(error))
                     break
-                size = windows.compact(pid, settings["width"], settings["height"], time.monotonic() + 15)
+                dimensions = profile if value.get("use_profiles", True) else {}
+                size = windows.compact(pid, dimensions.get("width", settings["width"]), dimensions.get("height", settings["height"]), time.monotonic() + 15)
                 with LOCK:
                     STATUS[identity] = "Aguardando heartbeat"
                 record(row["username"], f"Janela medida em {size[0]} × {size[1]} px" if size else "Janela compacta não confirmada")
@@ -364,9 +406,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.local():
             return self.reply(403, {"error": "Origem inválida."})
-        expected = KEY if self.path == "/heartbeat" else ADMIN
+        expected = KEY if self.path == "/heartbeat" else TRACKER_KEY if self.path in ("/tracker/state", "/tracker/reconnect") else ADMIN
         if not secrets.compare_digest(self.headers.get("X-Heartbeat-Key" if self.path == "/heartbeat" else "X-Rejoin-Key", ""), expected):
             return self.reply(401, {"error": "Chave inválida."})
+        self.path = {"/tracker/state": "/state", "/tracker/reconnect": "/reconnect"}.get(self.path, self.path)
         try:
             self.connection.settimeout(5)
             length = int(self.headers.get("Content-Length", "0"))
@@ -396,13 +439,58 @@ class Handler(BaseHTTPRequestHandler):
                     since = previous["since"] if continuous else now
                     LIVE[identity] = {"received": now, "place": place, "session": session, "since": since, "jobId": job,
                                       "readyForBlock": value.get("readyForBlock") is True, "failedJobId": failed_job,
+                                      "errorCode": value.get("errorCode") if type(value.get("errorCode")) is int and value["errorCode"] in (279, 773) else None,
+                                      "fpsSupported": value.get("fpsSupported") is True,
+                                      "retryIn": min(60, max(0, value.get("retryIn", 0))) if type(value.get("retryIn")) in (int, float) else 0,
                                       "joined": previous.get("joined", now) if previous and previous.get("jobId") == job and previous["session"] == session else now}
                     policy = REJOIN.get(identity)
-                    if policy and now - since >= 120 and policy["attempts"]:
+                    if policy and now - since >= 120 and policy["attempts"] and not LIVE[identity].get("errorCode"):
                         policy["attempts"] = 0
                         policy["next"] = 0
                         save_profiles()
-                return self.reply(200, {"ok": True, **collision_action(identity)})
+                profile = accounts.read(PROFILES, {}).get(str(identity), {})
+                return self.reply(200, {"ok": True, "fps": profile.get("fps"), **collision_action(identity)})
+            if self.path == "/startup":
+                with LOCK:
+                    settings = accounts.read(SETTINGS, {})
+                    if value.get("action") == "open":
+                        return self.reply(200, {"message": startup.launch(settings)})
+                    enabled = value.get("startWithWindows")
+                    companion = value.get("companionEnabled")
+                    if type(enabled) is not bool or type(companion) is not bool:
+                        raise ValueError("Configuração de inicialização inválida.")
+                    path = startup.executable(value.get("companionPath", ""))
+                    if companion and not path:
+                        raise ValueError("Escolha o aplicativo que será aberto junto.")
+                    startup.set_enabled(enabled)
+                    settings.update(startWithWindows=enabled, companionEnabled=companion, companionPath=path)
+                    accounts.write(SETTINGS, settings)
+                return self.reply(200, {"message": "Configurações de inicialização salvas."})
+            if self.path == "/profile":
+                ids = value.get("ids")
+                if not isinstance(ids, list) or not ids or len(ids) > 100 or any(type(i) is not int for i in ids):
+                    raise ValueError("Selecione contas cadastradas.")
+                limits = (("place", 1, 10**16-1), ("delay", 10, 3600), ("max_attempts", 1, 20),
+                          ("width", 160, 1920), ("height", 120, 1080), ("fps", 1, 240))
+                profile = {}
+                for key, lo, hi in limits:
+                    number = value.get(key)
+                    if type(number) is not int or not lo <= number <= hi:
+                        raise ValueError("Confira os valores do perfil.")
+                    profile[key] = number
+                with LOCK:
+                    if BUSY:
+                        raise ValueError("Aguarde a fila terminar antes de salvar perfis.")
+                    profiles = accounts.read(PROFILES, {})
+                    known = {a["userId"] for a in accounts.accounts()}
+                    if not set(ids) <= known:
+                        raise ValueError("Conta não cadastrada.")
+                    for identity in ids:
+                        profiles.setdefault(str(identity), {}).update(profile)
+                        if identity in REJOIN:
+                            REJOIN[identity].update({k: profile[k] for k in ("place", "delay", "max_attempts")})
+                    accounts.write(PROFILES, profiles)
+                return self.reply(200, {"message": "Perfil salvo para as contas selecionadas."})
             if self.path == "/optimization":
                 with LOCK:
                     if BUSY or windows.running():
@@ -434,6 +522,7 @@ class Handler(BaseHTTPRequestHandler):
                     accounts.write(SETTINGS, settings)
                     if not enabled:
                         SERVER_TARGETS.clear()
+                        BLOCK_DIAG.clear()
                         for identity, status in list(STATUS.items()):
                             if status.startswith("BLOCK ACC"):
                                 STATUS[identity] = "Pronta"
@@ -480,7 +569,9 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/cancel":
                 QUEUE_CANCEL.set()
                 return self.reply(200, {"ok": True})
-            if self.path == "/launch":
+            if self.path in ("/launch", "/reconnect"):
+                if self.path == "/reconnect":
+                    value["recover"] = True
                 start_job(value)
                 return self.reply(200, {"ok": True})
             if self.path == "/remove":
@@ -492,7 +583,7 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError("Aguarde a fila terminar.")
                     accounts.remove_accounts(ids)
                     for identity in ids:
-                        for mapping in (LIVE, REJOIN, STATUS):
+                        for mapping in (LIVE, REJOIN, STATUS, BINDINGS, SERVER_TARGETS, BLOCK_DIAG):
                             mapping.pop(identity, None)
                         profiles = accounts.read(PROFILES, {})
                         profiles.pop(str(identity), None)
@@ -530,8 +621,8 @@ class Handler(BaseHTTPRequestHandler):
                             else:
                                 REJOIN[identity] = {"place": place, "delay": delay,
                                     "max_attempts": maximum, "attempts": 0, "next": 0}
-                                profiles[str(identity)] = {"place": place, "delay": delay,
-                                    "max_attempts": maximum, "attempts": 0, "enabled": True}
+                                profiles.setdefault(str(identity), {}).update({"place": place, "delay": delay,
+                                    "max_attempts": maximum, "attempts": 0, "enabled": True})
                     accounts.write(PROFILES, profiles)
                 return self.reply(200, {"ok": True})
             if self.path == "/check":
@@ -560,13 +651,14 @@ def watch_once():
         now = time.monotonic()
         for identity, policy in REJOIN.items():
             beat = LIVE.get(identity)
-            if not beat or now - beat["received"] < policy["delay"] or now < policy["next"]:
+            fault = bool(beat and beat.get("errorCode") in (279, 773) and now - beat["received"] < 20)
+            if not beat or (not fault and now - beat["received"] < policy["delay"]) or now < policy["next"]:
                 continue
             if policy["attempts"] >= policy["max_attempts"]:
                 STATUS[identity] = "Limite de tentativas atingido · reative para tentar novamente"
                 continue
             binding = BINDINGS.get(identity)
-            if binding and windows.same_process(*binding):
+            if not fault and binding and windows.same_process(*binding):
                 STATUS[identity] = "Sem sinal · instância ainda aberta; confira o coletor"
                 continue
             policy["attempts"] += 1
@@ -574,7 +666,12 @@ def watch_once():
             save_profiles()
             try:
                 record(str(identity), f"Reconexão {policy['attempts']}/{policy['max_attempts']}")
-                start_job({"ids": [identity], "place": policy["place"]}, remember_place=False)
+                if fault:
+                    record(str(identity), "Recuperando erro " + str(beat["errorCode"]))
+                payload = {"ids": [identity], "place": policy["place"]}
+                if fault:
+                    payload["recover"] = True
+                start_job(payload, remember_place=False)
             except (ValueError, OSError) as error:
                 STATUS[identity] = str(error)
                 record(str(identity), str(error))
@@ -610,7 +707,21 @@ def main():
         Thread(target=server.serve_forever, daemon=True).start()
         restore_profiles()
         Thread(target=watch, daemon=True).start()
-        desktop = Desktop(root, PORT, ADMIN, ASSETS, accounts.read(SETTINGS, {}))
+        settings = accounts.read(SETTINGS, {})
+        if settings.get("startWithWindows"):
+            try:
+                startup.set_enabled(True)
+            except (ValueError, OSError) as error:
+                record("Inicialização", str(error))
+        desktop = Desktop(root, PORT, ADMIN, ASSETS, settings)
+        accounts.write(accounts.ROOT / "tracker-bridge.json", {"port": PORT, "key": TRACKER_KEY})
+        def companion():
+            try:
+                record("Inicialização", startup.launch(settings))
+            except (ValueError, OSError) as error:
+                desktop.events.put((lambda value, error: desktop.notice.config(text=value), str(error), None))
+                record("Inicialização", str(error))
+        root.after(1500, lambda: threading.Thread(target=companion, daemon=True).start())
         try:
             desktop.add_tray(tray.attach(root, ASSETS))
         except ImportError:

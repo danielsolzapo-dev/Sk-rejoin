@@ -16,6 +16,25 @@ local moveStarted = 0
 local targetJob = ""
 local failedJob = ""
 local attempts = 0
+local cap = setfpscap
+local appliedFps = nil
+local function connectionError()
+    local ok, code = pcall(function()
+        local gui = game:GetService("CoreGui"):FindFirstChild("RobloxPromptGui")
+        local prompt = gui and gui:FindFirstChild("ErrorPrompt", true)
+        if not prompt or (prompt:IsA("GuiObject") and not prompt.Visible) then return nil end
+        for _, item in ipairs(prompt:GetDescendants()) do
+            if item:IsA("TextLabel") then
+                local text = item.Text:lower()
+                if text:find("code", 1, true) or text:find("código", 1, true) then
+                    if text:find("279", 1, true) then return 279 end
+                    if text:find("773", 1, true) then return 773 end
+                end
+            end
+        end
+    end)
+    return ok and code or nil
+end
 
 local function moveFailed()
     failedJob = targetJob
@@ -47,12 +66,18 @@ task.spawn(function()
             Headers = {["Content-Type"] = "application/json", ["X-Heartbeat-Key"] = key},
             Body = http:JSONEncode({
                 userId = player.UserId, placeId = game.PlaceId, jobId = game.JobId,
-                session = session, readyForBlock = ready, failedJobId = failedJob
+                session = session, readyForBlock = ready, failedJobId = failedJob,
+                errorCode = connectionError(), fpsSupported = type(cap) == "function",
+                retryIn = moving and math.max(0, 30 - (now - moveStarted)) or math.max(0, nextMove - now)
             })
         })
         if ok and response and response.StatusCode == 200 and env.RejoinDeskHeartbeat == session then
             local parsed, data = pcall(http.JSONDecode, http, response.Body)
             if parsed and type(data) == "table" then
+                if type(data.fps) == "number" and data.fps >= 1 and data.fps <= 240
+                    and type(cap) == "function" and appliedFps ~= data.fps then
+                    if pcall(cap, data.fps) then appliedFps = data.fps end
+                end
                 local move = data.relocate
                 if ready and not moving and os.clock() >= nextMove and type(move) == "table"
                     and move.placeId == game.PlaceId and type(move.jobId) == "string"
