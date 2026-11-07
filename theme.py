@@ -53,6 +53,7 @@ def apply(root, palette, scale=1.0):
     from tkinter import ttk
     # Native themed controls keep keyboard/focus behavior and do not grow the EXE.
     style = ttk.Style(root)
+    style.layout('Treeview',[('Treeview.treearea',{'sticky':'nswe'})])
     style.configure('Treeview', background=palette['surface'], fieldbackground=palette['surface'],
                     foreground=palette['text'], rowheight=round(ROW_HEIGHT*scale), indent=0, borderwidth=0,
                     bordercolor=palette['border'], lightcolor=palette['border'], darkcolor=palette['border'], relief='flat', font=(FONT, 9))

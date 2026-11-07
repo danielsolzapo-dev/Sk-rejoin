@@ -93,8 +93,13 @@ class RefinedUI:
         utilities.add_separator()
         utilities.add_command(label=tr('ui_ac1bfe35e71d'),command=self.show_search,accelerator='Ctrl+F')
         utilities.add_command(label=tr('ui_6fc2e4220f00'),command=lambda:self.run('/cancel',{}))
-        self.heartbeat_button = self.button(self.compact_panel, tr('ui_eb4d4196e7cc'), self.heartbeat)
-        self.heartbeat_button.grid(row=8, column=0, sticky='ew', pady=(3, 0))
+        self.profile_button.grid_remove()
+        self.frequent_actions=tk.Frame(self.compact_panel)
+        self.frequent_actions.grid(row=7,column=0,sticky='ew',pady=(3,0))
+        self.profile_button=self.button(self.frequent_actions,tr('ui_c8e4eed80827'),self.toggle_controls)
+        self.profile_button.pack(side='left',fill='x',expand=True,padx=(0,3))
+        self.heartbeat_button=self.button(self.frequent_actions,tr('ui_eb4d4196e7cc'),self.heartbeat)
+        self.heartbeat_button.pack(side='left',fill='x',expand=True)
         self.compact_panel.rowconfigure(5, weight=0)
         self.destination_error.grid(row=5, column=0, sticky='ew')
         self.progress_panel = tk.Frame(self.compact_panel)
@@ -105,7 +110,7 @@ class RefinedUI:
         self.progress_text.pack(fill='x')
         self.progress_panel.bind('<Configure>',lambda event:self.progress_text.config(wraplength=max(1,event.width-2)))
         self.current_account.config(wraplength=round(220*self.ui_scale))
-        self.profile_button.grid(row=7, column=0, sticky='ew', pady=(3, 0))
+        self.current_account.grid_configure(pady=(3,2))
         self.recent_panel = tk.Frame(self.compact_panel)
         self.recent_panel.grid(row=9, column=0, sticky='nsew', pady=(4, 0))
         self.compact_panel.rowconfigure(9, weight=1)
@@ -149,13 +154,15 @@ class RefinedUI:
         self.brand_art.config(bg=p['bg'])
         self.version_chip.config(bg=p['bg'], fg=p['muted'])
         self.compact_panel.config(bg=p['alternate'], bd=0, highlightthickness=1, highlightbackground=p['border'])
-        for container in (self.progress_panel, self.recent_panel): container.config(bg=p['alternate'])
+        for container in (self.progress_panel, self.recent_panel,self.frequent_actions): container.config(bg=p['alternate'])
         for label in (self.progress_title, self.recent_title, self.recent_empty): label.config(bg=p['alternate'], fg=p['muted'])
         self.progress_text.config(bg=p['alternate'], fg=p['info'])
         self.current_account.config(bg=p['alternate'])
         for chip in (self.chip_diagnostic, self.chip_update, *self.recent_links):
             bg=chip.master.cget('bg')
             chip.config(bg=bg, fg=p[chip._sk_level], highlightbackground=bg, highlightcolor=p['accent'])
+        self.add_arrow.config(bg=p['button'],fg=p['text'],activebackground=p['hover'],activeforeground=p['text'],relief='flat',bd=0,pady=3,highlightthickness=1,highlightbackground=p['button'],highlightcolor=p['accent'],takefocus=True)
+        self.table.master.config(highlightthickness=1,highlightbackground=p['border'],bd=0)
         self.table.configure(show='tree headings')
         self.table.column('#0', width=round(26*self.ui_scale), minwidth=round(26*self.ui_scale), stretch=False)
         for state, token in [('online','success'),('loading','info'),('block','warning'),('offline','muted'),('error','error')]:
@@ -198,7 +205,7 @@ class RefinedUI:
         # No artificial 145px Nick minimum: size from actual text. Status grows last.
         if 'status' in widths:
             other=sum(width for name,width in widths.items() if name!='status')
-            widths['status']=max(round(heading.measure(self.table.heading('status','text'))+16*self.ui_scale),available-other)
+            widths['status']=max(round(heading.measure(self.table.heading('status','text'))+16*self.ui_scale),round(self.user_widths.get('status',0)*self.ui_scale),available-other)
         for column in columns:
             self.table.column(column,minwidth=1,stretch=False)
         for column,width in widths.items():
@@ -236,7 +243,8 @@ class RefinedUI:
         queue=self.state.get('waiting',0)
         summary=summary_text(len(self.rows),active,queue,len(self.ids()),errors)
         self.footer_summary.config(text=self.status_message or summary)
-        self.chip_diagnostic._sk_level='error' if errors else 'success'
+        warning=any(semantic_state(row) in ('block','loading','offline') for row in self.rows.values())
+        self.chip_diagnostic._sk_level='error' if errors else 'warning' if warning else 'success' if self.rows else 'info'
         self.chip_diagnostic.config(fg=self.palette[self.chip_diagnostic._sk_level])
 
     def render_refinement(self):
@@ -274,7 +282,7 @@ class RefinedUI:
 
     def install_selection_detail(self,row):
         # Full observed status is available without claiming unreported stages.
-        self.progress_text.config(text=self.progress_text.cget('text')+'\n'+status_text(row) if row else tr('ref_select_account'))
+        if not row:self.progress_text.config(text=tr('ref_select_account'))
 
     def select_recent(self,index):
         recent=self.ui_prefs.get('destinations',[])[:5]

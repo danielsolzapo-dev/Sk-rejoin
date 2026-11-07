@@ -24,7 +24,7 @@ for name,palette in theme.PALETTES.items():
 with tempfile.TemporaryDirectory() as folder:
     os.environ['LOCALAPPDATA']=folder
     assert ui_preferences.load()['theme']=='dark'
-    data={**ui_preferences.DEFAULTS,'theme':'light','columns':['account','age','status']}
+    data={**ui_preferences.DEFAULTS,'theme':'light','columns':['account','age','status'],'manualWidths':{'account':130,'status':280}}
     ui_preferences.save(data)
     assert ui_preferences.load()==data
     assert not list(ui_preferences.location().parent.glob('*.tmp'))
@@ -54,3 +54,14 @@ with tempfile.TemporaryDirectory() as folder:
     ui_preferences.save({'theme':'dark'},revision=10)
     assert ui_preferences.load()['theme']=='light','Delayed old workers must not overwrite a newer preference'
 print('PASS extracted FPS behavior and preference write ordering.')
+
+# Status icons are rasterized from the same geometry at the actual DPI size.
+from ui_icons import render_icon
+from PIL import Image
+import io
+for palette in theme.PALETTES.values():
+    for size in (16,20,24,32):
+        for name in ('online','offline','busy','warning','error'):
+            image=Image.open(io.BytesIO(render_icon(name,size,palette)))
+            assert image.size==(size,size) and image.mode=='RGBA'
+print('PASS DPI-native status icon dimensions (16/20/24/32px)')

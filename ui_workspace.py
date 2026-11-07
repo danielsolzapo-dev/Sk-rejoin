@@ -169,6 +169,7 @@ class WorkspaceUI(RefinedUI):
         self.ui_prefs['columns'] = list(self.table['displaycolumns'])
         self.ui_prefs['widths'] = {col: self.table.column(col, 'width') for col in self.table['columns']}
         self.persist_ui()
+        if getattr(self,'refined',False):self.schedule_fit()
 
     def column_dialog(self):
         body = self.dialog(tr('ui_1d109f1da215'))
@@ -244,6 +245,8 @@ class WorkspaceUI(RefinedUI):
         valid = raw.isascii() and raw.isdigit() and (0 < int(raw) < 10 ** 16)
         self.place.config(highlightbackground=self.palette['border'] if valid or not raw else self.palette['error'])
         self.destination_error.config(text='' if valid or not raw else tr('ui_bcc11d82e6c1'))
+        if valid or not raw:self.destination_error.grid_remove()
+        else:self.destination_error.grid()
         reason = tr('ui_d01b59f8c055') if not self.ids() else tr('ui_56087a9cfb50') if not valid else tr('ui_44b13386cdc7') if self.pending else ''
         for button in (self.open_button, self.reconnect_button):
             button.config(state='disabled' if reason else 'normal')
@@ -430,21 +433,11 @@ class WorkspaceUI(RefinedUI):
         target_size=round(16*self.ui_scale)
 
         def load():
-            from PIL import Image
-            import io
+            from ui_icons import render_icon
             values = {}
-            for mode in ('dark', 'light'):
-                for state in ('online', 'offline', 'busy', 'error', 'warning'):
-                    try:
-                        source='busy' if state=='warning' else state
-                        image=Image.open(assets / 'artwork' / 'icons' / f'{mode}-{source}-{size}.png').convert('RGBA')
-                        if state=='warning':
-                            alpha=image.getchannel('A')
-                            image=Image.new('RGBA',image.size,theme.PALETTES[mode]['warning']);image.putalpha(alpha)
-                        image=image.resize((target_size,target_size),Image.Resampling.LANCZOS)
-                        out=io.BytesIO();image.save(out,format='PNG');values[mode,state]=out.getvalue()
-                    except OSError:
-                        pass
+            for mode in ('dark','light'):
+                for state in ('online','offline','busy','error','warning'):
+                    values[mode,state]=render_icon(state,target_size,theme.PALETTES[mode])
             try:
                 values['brand'] = (assets / 'artwork' / 'portrait.png').read_bytes()
             except OSError:

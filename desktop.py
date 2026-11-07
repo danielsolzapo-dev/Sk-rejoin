@@ -569,6 +569,8 @@ class Desktop(WorkspaceUI):
         self.search_hint.config(text=tr('ui_35f8518f4786', p0=visible, p1=len(self.rows)))
         self.selection_info.config(text=tr('ui_4a62e217880b', p0=len(self.table.selection())))
 
+        if getattr(self,'refined',False):self.schedule_fit()
+
     def account_selected(self, event=None):
         self.update_footer()
         if hasattr(self, 'palette'):
