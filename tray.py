@@ -59,17 +59,21 @@ def attach(root, assets, callbacks=None, state=None, preferences=None):
                 last_status = summary
                 icon = holder['icon']
                 Thread(target=lambda: setattr(icon, 'title', tr('ui_3b34fef83c49') + summary), daemon=True).start()
+
                 def update_icon(value=summary):
                     from PIL import ImageDraw
-                    image=holder['image'].copy()
-                    color='#ba3346' if value=='Atenção' else '#9b6a10' if value=='Reconectando' else '#287545'
-                    draw=ImageDraw.Draw(image);size=image.width
-                    draw.ellipse((size*.64,size*.64,size*.96,size*.96),fill=color,outline='white',width=max(1,size//40))
-                    icon.icon=image
-                    if preferences and preferences().get('notifications') and value=='Atenção':
-                        try:icon.notify('Confira as contas no SK Rejoin.','Conexão precisa de atenção')
-                        except Exception:pass
-                Thread(target=update_icon,daemon=True).start()
+                    image = holder['image'].copy()
+                    color = '#ba3346' if value == tr('ui_c9701a7da6bb') else '#9b6a10' if value == tr('ui_5c2ce717bc1e') else '#287545'
+                    draw = ImageDraw.Draw(image)
+                    size = image.width
+                    draw.ellipse((size * 0.64, size * 0.64, size * 0.96, size * 0.96), fill=color, outline='white', width=max(1, size // 40))
+                    icon.icon = image
+                    if preferences and preferences().get('notifications') and (value == tr('ui_c9701a7da6bb')):
+                        try:
+                            icon.notify(tr('ui_e77ce596f92d'), tr('ui_91a76a81ddea'))
+                        except Exception:
+                            pass
+                Thread(target=update_icon, daemon=True).start()
         root.after(200, poll)
 
     def stop(event):

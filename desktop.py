@@ -33,6 +33,7 @@ class Desktop(WorkspaceUI):
         width, height = (round(784 * scale), round(301 * scale))
         width = min(width, root.winfo_screenwidth() - 40)
         height = min(height, root.winfo_screenheight() - 80)
+        self.initial_content_size = (width, height)
         root.geometry(f'{width}x{height}+20+20')
         root.minsize(round(720 * scale), round(285 * scale))
         root.configure(bg=BG)
@@ -168,10 +169,10 @@ class Desktop(WorkspaceUI):
         self.place.grid(row=1, column=0, sticky='ew', pady=(1, 4), ipady=1)
         buttons = tk.Frame(compact_panel, bg=PANEL)
         buttons.grid(row=2, column=0, sticky='ew')
-        self.open_button=self.button(buttons,tr('ui_535bc78c9148'),self.launch,True)
-        self.open_button.pack(side='left',fill='x',expand=True,padx=(0,4))
-        self.reconnect_button=self.button(buttons,tr('ui_64d04acedf37'),lambda:self.action('/reconnect'))
-        self.reconnect_button.pack(side='left',fill='x',expand=True)
+        self.open_button = self.button(buttons, tr('ui_535bc78c9148'), self.launch, True)
+        self.open_button.pack(side='left', fill='x', expand=True, padx=(0, 4))
+        self.reconnect_button = self.button(buttons, tr('ui_64d04acedf37'), lambda: self.action('/reconnect'))
+        self.reconnect_button.pack(side='left', fill='x', expand=True)
         self.current_account = self.label(compact_panel, tr('ui_6feee3a0e9e0'), size=9, color=MINT, wrap=230)
         self.current_account.grid(row=3, column=0, sticky='ew', pady=(7, 3))
         self.compact_status = self.label(compact_panel, tr('ui_13d8fb6b1ef5'), size=8, color=MUTED, wrap=230)
@@ -328,9 +329,8 @@ class Desktop(WorkspaceUI):
             self.button(actions, title, lambda a=action: self.bootstrap_action(a), action == 'open').pack(side='left', padx=(0, 8))
         self.button(actions, tr('ui_ab71f8e40f0e'), self.choose_bootstrapper).pack(side='left')
         self.label(tools, tr('ui_96a9579f63aa'), color=MUTED, wrap=850).pack(anchor='w', pady=(10, 0))
-
-        for name,page in [('Geral',general),('Inicialização',boot),('Reconexão',reconnection),('Desempenho',performance),('Aparência',appearance)]:
-            self.button(page,'Restaurar campos padrão',lambda n=name:self.reset_section(n)).pack(anchor='w',padx=16,pady=12)
+        for name, page in [(tr('ui_b6748d4ef8da'), general), (tr('ui_227221a807e9'), boot), (tr('ui_6291b22cc048'), reconnection), (tr('ui_fe22d91274fc'), performance), (tr('ui_8ecb9f1828bd'), appearance)]:
+            self.button(page, tr('ui_fb9e88ee4bdb'), lambda n=name: self.reset_section(n)).pack(anchor='w', padx=16, pady=12)
 
     def show_optimization(self):
         self.show_config()
@@ -455,10 +455,14 @@ class Desktop(WorkspaceUI):
             self.notice.config(text=tr('ui_44b13386cdc7'))
             return
         self.pending = True
+        if hasattr(self, 'palette'):
+            self.validate_destination()
         self.notice.config(text=tr('ui_53acce39d40f'))
 
         def finished(value, error):
             self.pending = False
+            if hasattr(self, 'palette'):
+                self.validate_destination()
             self.notice.config(text=error or tr('ui_ed9ff3e79c5f'))
             if not error and done:
                 done(value)
@@ -487,12 +491,13 @@ class Desktop(WorkspaceUI):
                 else:
                     self.table.insert('', 'end', iid=identity, values=values, tags=tags)
             self.row_cache = next_cache
-            if getattr(self,"icons",None):
-                mode="light" if self.palette==theme.LIGHT else "dark"
-                for identity,row in rows.items():
-                    if cache.get(identity)!=next_cache.get(identity):
-                        icon=self.icons.get((mode,self.icon_key(row)))
-                        if icon:self.table.item(identity,image=icon)
+            if getattr(self, 'icons', None):
+                mode = 'light' if self.palette == theme.LIGHT else 'dark'
+                for identity, row in rows.items():
+                    if cache.get(identity) != next_cache.get(identity):
+                        icon = self.icons.get((mode, self.icon_key(row)))
+                        if icon:
+                            self.table.item(identity, image=icon)
             self.rows = rows
             if hasattr(self, 'search'):
                 self.filter_accounts()
@@ -507,11 +512,13 @@ class Desktop(WorkspaceUI):
                 self.startup_update_checked = True
                 self.check_startup_update(state['repo'])
             self.config_multi.config(text=state['multi'])
-            if hasattr(self,'version_chip'):self.version_chip.config(text='SK Rejoin '+state['version'])
-            if hasattr(self,"startup_progress"):self.startup_progress.config(text=state.get("startupStatus", ""))
-            if hasattr(self,"footer_selection"):
-                errors=sum(bool(row.get("errorCode")) for row in rows.values())
-                self.footer_selection.config(text=f"{len(self.ids())} selecionadas · {errors} erro(s)")
+            if hasattr(self, 'version_chip'):
+                self.version_chip.config(text=tr('ui_1ae9cb3d7148') + state['version'])
+            if hasattr(self, 'startup_progress'):
+                self.startup_progress.config(text=state.get('startupStatus', ''))
+            if hasattr(self, 'footer_selection'):
+                errors = sum((bool(row.get('errorCode')) for row in rows.values()))
+                self.footer_selection.config(text=tr('ui_df71a54f3933', p0=len(self.ids()), p1=errors))
             self.rejoin_status.config(text=tr('ui_9de78c0ac341', p0=state['rejoin'], p1=state['multi'], p2=state.get('startupStatus', ''), p3=state['version']))
         self.root.after(4000 if self.economy else 2000, self.refresh)
 
@@ -557,7 +564,8 @@ class Desktop(WorkspaceUI):
         self.selection_info.config(text=tr('ui_4a62e217880b', p0=len(self.table.selection())))
 
     def account_selected(self, event=None):
-        if hasattr(self,"palette"):self.root.after_idle(self.validate_destination)
+        if hasattr(self, 'palette'):
+            self.root.after_idle(self.validate_destination)
         self.load_profile(event)
         ids = self.ids()
         if len(ids) == 1:
@@ -606,9 +614,9 @@ class Desktop(WorkspaceUI):
             except ValueError:
                 self.notice.config(text=tr('ui_844eff263459'))
                 return
-        if path in ("/launch","/reconnect") and hasattr(self,"ui_prefs"):
-            recent=self.ui_prefs.get("destinations",[])
-            self.ui_prefs["destinations"]=[place]+[p for p in recent if p!=place][:7]
+        if path in ('/launch', '/reconnect') and hasattr(self, 'ui_prefs'):
+            recent = self.ui_prefs.get('destinations', [])
+            self.ui_prefs['destinations'] = [place] + [p for p in recent if p != place][:7]
             self.persist_ui()
         self.run(path, payload)
 
@@ -643,9 +651,8 @@ class Desktop(WorkspaceUI):
         self.button(panel, tr('ui_06b00a36df2b'), lambda: self.run('/startup', {'action': 'cancel'})).pack(anchor='w', pady=5)
         self.button(panel, tr('ui_f54e062a61af'), lambda: self.run('/startup', {'action': 'open'}, lambda v: self.notice.config(text=v['message']))).pack(anchor='w', pady=5)
         self.label(panel, tr('ui_988d4c3a3378'), color=MUTED, wrap=700).pack(anchor='w', pady=10)
-
-        self.startup_progress=self.label(panel,"",color=MINT,wrap=650)
-        self.startup_progress.pack(anchor="w",pady=8)
+        self.startup_progress = self.label(panel, '', color=MINT, wrap=650)
+        self.startup_progress.pack(anchor='w', pady=8)
 
     def choose_companion(self):
         path = filedialog.askopenfilename(parent=self.root, title=tr('ui_556e79fb4477'), filetypes=[(tr('ui_5590a11391bb'), '*.exe')])
@@ -690,9 +697,11 @@ class Desktop(WorkspaceUI):
 
     def toggle_compact(self):
         self.compact = not self.compact
-        if hasattr(self,'banner') and self.compact and not self.removal_timer:self.banner.pack_forget()
-        if hasattr(self,'ui_prefs'):
-            self.ui_prefs['compact']=self.compact;self.persist_ui()
+        if hasattr(self, 'banner') and self.compact and (not self.removal_timer):
+            self.banner.pack_forget()
+        if hasattr(self, 'ui_prefs'):
+            self.ui_prefs['compact'] = self.compact
+            self.persist_ui()
         ttk.Style(self.root).configure(tr('ui_d78dca84fb22'), rowheight=20 if self.compact else 28)
 
     def set_list_columns(self):
@@ -743,7 +752,8 @@ class Desktop(WorkspaceUI):
             body = self.dialog(tr('ui_f26a20b05946'))
             result = value['result']
             lines = [result.get('message', ''), tr('ui_a5b7f76f00d1') + result.get('stage', '—'), tr('ui_42c7f57fcc0c') + (tr('ui_84fb9bfc81c8') if result.get('sessionValid') else tr('ui_72534bbb0ce3')), tr('ui_de80e6064caa') + str(result.get('ticketHTTP', '—')), tr('ui_108f168241ae') + (tr('ui_84fb9bfc81c8') if result.get('ticketIssued') else tr('ui_72534bbb0ce3')), tr('ui_d3ef9834724f') + (tr('ui_84fb9bfc81c8') if result.get('challenge') else tr('ui_72534bbb0ce3')), tr('ui_6c4122b22412')]
-            self.label(body, '\n\n'.join(lines), wrap=520).pack(anchor='w')
+            self.show_timeline(body, [(tr('ui_de10fc0cb78c'), tr('ui_ffe684233936') if result.get('sessionValid') else result.get('message', tr('ui_0a6a9a312143')), bool(result.get('sessionValid'))), (tr('ui_a7677e84b666'), tr('ui_b7c45bc195b8') + str(result.get('ticketHTTP', '—')), bool(result.get('ticketIssued'))), (tr('ui_dd77aceafb55'), tr('ui_6512cf4c7229'), None)])
+            self.label(body, result.get('message', ''), wrap=520).pack(anchor='w', pady=8)
         self.run('/auth-check', {'id': ids[0], 'place': place}, show)
 
     def diagnostic(self):
@@ -852,7 +862,7 @@ class Desktop(WorkspaceUI):
 
         def checked(value, error):
             self.pending = False
-            self.last_check=time.strftime('%H:%M')
+            self.last_check = time.strftime('%H:%M')
             if error:
                 self.notice.config(text=tr('ui_948fd9776678', p0=error))
             elif value['newer'] and value['installable']:

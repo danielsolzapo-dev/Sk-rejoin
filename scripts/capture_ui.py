@@ -17,9 +17,9 @@ sys.path.insert(0,str(ROOT))
 if os.name!='nt':raise SystemExit('Screenshot matrix requires a Windows desktop.')
 from PIL import Image,ImageGrab,ImageOps,ImageDraw
 import tkinter as tk
+os.environ['LOCALAPPDATA']=tempfile.mkdtemp(prefix='sk-ui-fixtures-')
 import theme
 import browser_login
-os.environ['LOCALAPPDATA']=tempfile.mkdtemp(prefix='sk-ui-fixtures-')
 if args.label=='before':
     spec=importlib.util.spec_from_file_location('before_desktop',ROOT/'docs'/'desktop-before.py')
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);Desktop=module.Desktop

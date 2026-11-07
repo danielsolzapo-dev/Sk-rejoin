@@ -23,6 +23,13 @@ class WorkspaceUI:
         if not hasattr(self, 'theme_choice'):
             self.theme_choice = tk.StringVar(value='dark')
         self.root.configure(menu=self.menubar)
+        self.initial_size_calibrated = False
+
+        def mapped(event):
+            if event.widget is self.root and (not self.initial_size_calibrated):
+                self.initial_size_calibrated = True
+                self.root.after_idle(self.calibrate_content_size)
+        self.root.bind('<Map>', mapped, add='+')
         view = self.root.nametowidget(self.menubar.entrycget(2, 'menu'))
         for label, mode in [(tr('ui_0d7f97c38367'), 'dark'), (tr('ui_21f72c3cc4b9'), 'light'), (tr('ui_cdb5c53c91f0'), 'system')]:
             view.add_radiobutton(label=label, variable=self.theme_choice, value=mode, command=lambda m=mode: self.choose_theme(m))
@@ -54,25 +61,25 @@ class WorkspaceUI:
         self.table.bind('<Leave>', lambda event: self.hide_tooltip())
         self.tip = None
         self.tip_after = None
-        self.footer_selection=self.label(self.metrics[0].master,'0 selecionadas',size=8,color=self.palette['muted'])
+        self.footer_selection = self.label(self.metrics[0].master, tr('ui_2e5298fd2ee8'), size=8, color=self.palette['muted'])
         self.footer_selection.pack(side='right')
-        self.place.bind('<Down>',self.destination_history)
-        for button in (self.open_button,self.reconnect_button):
-            self.install_tooltip(button,lambda b=button:getattr(b,'_sk_reason','') or b.cget('text'))
-        self.install_tooltip(self.place,'Place ID numérico. Pressione ↓ para ver destinos recentes.')
-        for variable in (self.start_windows,self.companion_enabled,self.start_weblauncher,self.start_accounts):
-            variable.trace_add('write',lambda *args:setattr(self,'ui_config_dirty',True))
-        self.statusbar=tk.Frame(self.workspace)
-        self.statusbar.pack(before=self.tabs,side='bottom',fill='x',pady=(2,0))
-        self.version_chip=self.label(self.statusbar,'SK Rejoin',size=8,color=self.palette['muted'])
-        self.version_chip.pack(side='left',padx=(0,8))
-        self.button(self.statusbar,'Diagnóstico',self.diagnostic).pack(side='left',padx=2)
-        self.update_chip=self.button(self.statusbar,'Atualizações',self.updates)
+        self.place.bind('<Down>', self.destination_history)
+        for button in (self.open_button, self.reconnect_button):
+            self.install_tooltip(button, lambda b=button: getattr(b, '_sk_reason', '') or b.cget('text'))
+        self.install_tooltip(self.place, tr('ui_c7d0f2b4503e'))
+        for variable in (self.start_windows, self.companion_enabled, self.start_weblauncher, self.start_accounts):
+            variable.trace_add('write', lambda *args: setattr(self, 'ui_config_dirty', True))
+        self.statusbar = tk.Frame(self.workspace)
+        self.statusbar.pack(before=self.tabs, side='bottom', fill='x', pady=(2, 0))
+        self.version_chip = self.label(self.statusbar, tr('ui_4176882510c1'), size=8, color=self.palette['muted'])
+        self.version_chip.pack(side='left', padx=(0, 8))
+        self.button(self.statusbar, tr('ui_040835e837a6'), self.diagnostic).pack(side='left', padx=2)
+        self.update_chip = self.button(self.statusbar, tr('ui_cfeb11c07f77'), self.updates)
         self.update_chip.pack(side='right')
-        self.last_check = '—'   
+        self.last_check = '—'
         self.icons = {}
-        self.table.configure(show="tree headings")
-        self.table.column("#0",width=round(24*self.ui_scale),stretch=False,minwidth=20)
+        self.table.configure(show=tr('ui_018d185002bd'))
+        self.table.column('#0', width=round(24 * self.ui_scale), stretch=False, minwidth=20)
         self.load_ui_icons()
         self.apply_theme('dark')
 
@@ -87,7 +94,7 @@ class WorkspaceUI:
         self.ui_prefs = prefs
         self.system_theme = system
         self.minimize_option.set(bool(prefs.get('minimizeToTray', True)))
-        self.notify_option.set(bool(prefs.get('notifications',False)))
+        self.notify_option.set(bool(prefs.get('notifications', False)))
         self.theme_choice.set(prefs.get('theme', 'dark'))
         self.apply_theme(system if self.theme_choice.get() == 'system' else self.theme_choice.get())
         columns = [c for c in prefs.get('columns', []) if c in self.table['columns']]
@@ -97,8 +104,8 @@ class WorkspaceUI:
             if col in self.table['columns'] and type(width) is int and (45 <= width <= 1200):
                 self.table.column(col, width=width)
         self.validate_destination()
-        if not prefs.get('onboarded') and not self.rows:
-            self.show_banner('Prepare sua primeira conta em quatro passos.',self.first_run,'Começar')
+        if not prefs.get('onboarded') and (not self.rows):
+            self.show_banner(tr('ui_5671c8725752'), self.first_run, tr('ui_8d04ebe0bc07'))
         self.root.after(10000, self.poll_windows_theme)
 
     def poll_windows_theme(self):
@@ -132,7 +139,8 @@ class WorkspaceUI:
         if hasattr(self, 'table'):
             for name, color in [('even', 'surface'), ('odd', 'alternate'), ('online', 'success'), ('offline', 'muted'), ('error', 'error'), ('block', 'warning')]:
                 self.table.tag_configure(name, **{'background' if name in ('even', 'odd') else 'foreground': self.palette[color]})
-        if getattr(self,'icons',None):self.refresh_icon_rows()
+        if getattr(self, 'icons', None):
+            self.refresh_icon_rows()
         if hasattr(self, 'destination_error'):
             self.destination_error.config(fg=self.palette['error'])
 
@@ -212,10 +220,10 @@ class WorkspaceUI:
         valid = raw.isascii() and raw.isdigit() and (0 < int(raw) < 10 ** 16)
         self.place.config(highlightbackground=self.palette['border'] if valid or not raw else self.palette['error'])
         self.destination_error.config(text='' if valid or not raw else tr('ui_bcc11d82e6c1'))
-        reason='Selecione uma conta.' if not self.ids() else 'Informe um Place ID válido.' if not valid else 'Aguarde a operação atual.' if self.pending else ''
-        for button in (self.open_button,self.reconnect_button):
+        reason = tr('ui_d01b59f8c055') if not self.ids() else tr('ui_56087a9cfb50') if not valid else tr('ui_44b13386cdc7') if self.pending else ''
+        for button in (self.open_button, self.reconnect_button):
             button.config(state='disabled' if reason else 'normal')
-            button._sk_reason=reason
+            button._sk_reason = reason
         return valid
 
     def show_banner(self, text, action=None, label=tr('ui_bf763df73110')):
@@ -328,10 +336,12 @@ class WorkspaceUI:
             self.persist_ui()
         tk.Checkbutton(general, text=tr('ui_120f4fd08e81'), variable=self.minimize_option, command=minimize).pack(anchor='w', padx=16, pady=8)
         self.button(general, tr('ui_e4aab1a357fe'), self.first_run).pack(anchor='w', padx=16, pady=8)
-        self.notify_option=tk.BooleanVar(value=False)
+        self.notify_option = tk.BooleanVar(value=False)
+
         def notify():
-            self.ui_prefs['notifications']=self.notify_option.get();self.persist_ui()
-        tk.Checkbutton(general,text='Notificações opcionais para erros de conexão',variable=self.notify_option,command=notify).pack(anchor='w',padx=16,pady=6)
+            self.ui_prefs['notifications'] = self.notify_option.get()
+            self.persist_ui()
+        tk.Checkbutton(general, text=tr('ui_edf8010ccd34'), variable=self.notify_option, command=notify).pack(anchor='w', padx=16, pady=6)
         self.label(reconnection, tr('ui_c0e8b360a6b3'), size=14, bold=True).pack(anchor='w', padx=16, pady=12)
         self.label(reconnection, tr('ui_8cc542df4c1a'), wrap=630).pack(anchor='w', padx=16, pady=8)
         self.button(reconnection, tr('ui_ffb6856e5ba3'), self.toggle_controls, True).pack(anchor='w', padx=16, pady=8)
@@ -377,84 +387,120 @@ class WorkspaceUI:
         self.tray_hide = hide
 
     def reconnect_all(self):
-        self.search.set('');self.state_filter.set('Todas');self.filter_accounts()
+        self.search.set('')
+        self.state_filter.set(tr('ui_8a3c3440366a'))
+        self.filter_accounts()
         self.select_all()
         self.action('/reconnect')
 
-    def icon_key(self,row):
-        if row.get('errorCode') or 'erro' in row.get('status','').lower():return 'error'
-        if row.get('age') is not None and row['age']<20:return 'online'
-        if 'abrindo' in row.get('status','').lower() or 'aguardando' in row.get('status','').lower():return 'busy'
+    def icon_key(self, row):
+        if row.get('errorCode') or 'erro' in row.get('status', '').lower():
+            return 'error'
+        if row.get('age') is not None and row['age'] < 20:
+            return 'online'
+        if 'abrindo' in row.get('status', '').lower() or 'aguardando' in row.get('status', '').lower():
+            return 'busy'
         return 'offline'
 
     def load_ui_icons(self):
         from pathlib import Path
         import sys
-        assets=Path(getattr(sys,'_MEIPASS',Path(__file__).parent))
-        size=24 if self.ui_scale>=1.5 else 16
-        def load():
-            values={}
-            for mode in ('dark','light'):
-                for state in ('online','offline','busy','error'):
-                    try:values[(mode,state)]=(assets/'artwork'/'icons'/f'{mode}-{state}-{size}.png').read_bytes()
-                    except OSError:pass
-            self.events.put((self.icons_ready,values,None))
-        Thread(target=load,daemon=True).start()
+        assets = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
+        size = 24 if self.ui_scale >= 1.5 else 16
 
-    def icons_ready(self,values,error):
-        self.icons={key:tk.PhotoImage(master=self.root,data=data,format='png') for key,data in values.items()}
+        def load():
+            values = {}
+            for mode in ('dark', 'light'):
+                for state in ('online', 'offline', 'busy', 'error'):
+                    try:
+                        values[mode, state] = (assets / 'artwork' / 'icons' / f'{mode}-{state}-{size}.png').read_bytes()
+                    except OSError:
+                        pass
+            self.events.put((self.icons_ready, values, None))
+        Thread(target=load, daemon=True).start()
+
+    def icons_ready(self, values, error):
+        self.icons = {key: tk.PhotoImage(master=self.root, data=data, format='png') for key, data in values.items()}
         self.refresh_icon_rows()
 
     def refresh_icon_rows(self):
-        mode='light' if self.palette==theme.LIGHT else 'dark'
-        for identity,row in self.rows.items():
-            image=self.icons.get((mode,self.icon_key(row)))
-            if image:self.table.item(identity,image=image)
+        mode = 'light' if self.palette == theme.LIGHT else 'dark'
+        for identity, row in self.rows.items():
+            image = self.icons.get((mode, self.icon_key(row)))
+            if image:
+                self.table.item(identity, image=image)
 
-    def destination_history(self,event=None):
-        menu=tk.Menu(self.root,tearoff=False)
-        for place in self.ui_prefs.get('destinations',[]):
+    def destination_history(self, event=None):
+        menu = tk.Menu(self.root, tearoff=False)
+        for place in self.ui_prefs.get('destinations', []):
+
             def select(value=place):
-                self.place.delete(0,'end');self.place.insert(0,str(value));self.validate_destination()
-            menu.add_command(label=str(place),command=select)
-        if not self.ui_prefs.get('destinations'):menu.add_command(label='Nenhum destino recente',state='disabled')
-        menu.tk_popup(self.place.winfo_rootx(),self.place.winfo_rooty()+self.place.winfo_height())
+                self.place.delete(0, 'end')
+                self.place.insert(0, str(value))
+                self.validate_destination()
+            menu.add_command(label=str(place), command=select)
+        if not self.ui_prefs.get('destinations'):
+            menu.add_command(label=tr('ui_7e06dcb79642'), state='disabled')
+        menu.tk_popup(self.place.winfo_rootx(), self.place.winfo_rooty() + self.place.winfo_height())
         menu.grab_release()
         return 'break'
 
-    def install_tooltip(self,widget,text):
+    def install_tooltip(self, widget, text):
+
         def enter(event):
             self.hide_tooltip()
+
             def show():
-                value=text() if callable(text) else text
-                if not value:return
-                self.tip=tk.Toplevel(self.root);self.tip.overrideredirect(True)
-                self.tip.geometry(f'+{event.x_root+12}+{event.y_root+14}')
-                tk.Label(self.tip,text=value,bg=self.palette['surface'],fg=self.palette['text'],padx=8,pady=6,wraplength=300,justify='left').pack()
-            self.tip_after=self.root.after(500,show)
-        widget.bind('<Enter>',enter,add='+');widget.bind('<Leave>',lambda event:self.hide_tooltip(),add='+')
+                value = text() if callable(text) else text
+                if not value:
+                    return
+                self.tip = tk.Toplevel(self.root)
+                self.tip.overrideredirect(True)
+                self.tip.geometry(f'+{event.x_root + 12}+{event.y_root + 14}')
+                tk.Label(self.tip, text=value, bg=self.palette['surface'], fg=self.palette['text'], padx=8, pady=6, wraplength=300, justify='left').pack()
+            self.tip_after = self.root.after(500, show)
+        widget.bind('<Enter>', enter, add='+')
+        widget.bind('<Leave>', lambda event: self.hide_tooltip(), add='+')
 
-    def presentation_error(self,code):
-        return {279:'Conexão com o servidor falhou. Confira a rede e tente novamente.',
-                773:'A troca de servidor falhou. Consulte os detalhes da conexão.',
-                403:'Autenticação recusada. Abra o diagnóstico para conferir a etapa.',
-                415:'Formato da requisição recusado. Confira a versão do APP.',
-                429:'Muitas solicitações. Aguarde antes de tentar novamente.'}.get(code,'')
+    def presentation_error(self, code):
+        return {279: tr('ui_ef352caf7fcf'), 773: tr('ui_81afd13aac1e'), 403: tr('ui_f7ddd2bce342'), 415: tr('ui_8abf7910dd15'), 429: tr('ui_7f74710ed8f2')}.get(code, '')
 
-    def reset_section(self,name):
-        # Reset editable presentation fields only. Existing Save/Apply actions remain explicit.
-        fields={
-            'Inicialização':[(self.companion_path,''),*( (field,'10' if key=='webLauncherDelay' else '20') for key,field in self.start_delays.items())],
-            'Reconexão':[(self.rejoin_delay,'20'),(self.max_attempts,'3'),(self.profile_fps,'10'),(self.dimensions['limit'],'2'),(self.dimensions['width'],'320'),(self.dimensions['height'],'240')],
-            'Desempenho':[(self.opt_fps,'10'),(self.opt_folder,'')],
-        }
-        for field,value in fields.get(name,[]):field.delete(0,'end');field.insert(0,value)
-        if name=='Inicialização':
-            for variable in (self.start_windows,self.companion_enabled,self.start_accounts):variable.set(False)
+    def reset_section(self, name):
+        fields = {tr('ui_227221a807e9'): [(self.companion_path, ''), *((field, '10' if key == 'webLauncherDelay' else '20') for key, field in self.start_delays.items())], tr('ui_6291b22cc048'): [(self.rejoin_delay, '20'), (self.max_attempts, '3'), (self.profile_fps, '10'), (self.dimensions['limit'], '2'), (self.dimensions['width'], '320'), (self.dimensions['height'], '240')], tr('ui_fe22d91274fc'): [(self.opt_fps, '10'), (self.opt_folder, '')]}
+        for field, value in fields.get(name, []):
+            field.delete(0, 'end')
+            field.insert(0, value)
+        if name == tr('ui_227221a807e9'):
+            for variable in (self.start_windows, self.companion_enabled, self.start_accounts):
+                variable.set(False)
             self.start_weblauncher.set(True)
-        if name=='Aparência':self.choose_theme('dark')
-        if name=='Geral':
-            self.minimize_option.set(True);self.notify_option.set(False)
-            self.ui_prefs.update(minimizeToTray=True,notifications=False);self.persist_ui()
-        self.ui_config_dirty=bool(fields.get(name))
-        self.notice.config(text='Campos restaurados. Salve ou aplique pela ação da seção para alterar o comportamento.')
+        if name == tr('ui_8ecb9f1828bd'):
+            self.choose_theme('dark')
+        if name == tr('ui_b6748d4ef8da'):
+            self.minimize_option.set(True)
+            self.notify_option.set(False)
+            self.ui_prefs.update(minimizeToTray=True, notifications=False)
+            self.persist_ui()
+        self.ui_config_dirty = bool(fields.get(name))
+        self.notice.config(text=tr('ui_f0b99c702350'))
+
+    def show_timeline(self, body, steps):
+        for title, detail, status in steps:
+            card = tk.Frame(body, padx=10, pady=6)
+            card.pack(fill='x', pady=3)
+            symbol = '✓' if status is True else '!' if status is False else '○'
+            color = self.palette['success'] if status is True else self.palette['error'] if status is False else self.palette['muted']
+            self.label(card, symbol + '  ' + title, bold=True, color=color).pack(anchor='w')
+            self.label(card, detail, wrap=520, color=self.palette['muted']).pack(anchor='w', pady=2)
+
+    def calibrate_content_size(self, attempt=0):
+        width, height = self.initial_content_size
+        actual = (self.root.winfo_width(), self.root.winfo_height())
+        if actual == (width, height) or attempt >= 3:
+            return
+        import re
+        match = re.match('(\\d+)x(\\d+)', self.root.geometry())
+        if match:
+            requested_width, requested_height = map(int, match.groups())
+            self.root.geometry(f'{requested_width + width - actual[0]}x{requested_height + height - actual[1]}')
+            self.root.after_idle(lambda: self.calibrate_content_size(attempt + 1))
