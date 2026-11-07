@@ -154,6 +154,7 @@ def diagnostic():
             checks.append("Protocolo Roblox registrado" if command else "Protocolo Roblox vazio")
         except OSError:
             checks.append("Protocolo Roblox ausente. Abra um jogo pelo site oficial neste PC.")
+    checks.append(accounts.network_diagnostic())
     checks.append("Sessões locais cadastradas: " + str(len(accounts.accounts())))
     checks.append("Reconexão aguarda um heartbeat desta execução do app antes de monitorar cada conta.")
     for row in accounts.auth_diagnostics():

@@ -41,14 +41,22 @@ with patch.object(a, 'load_session', return_value=(metadata, {'cookie': cookie, 
     opened.assert_not_called()
     report = json.dumps(a.auth_diagnostics())
     assert all(secret not in report for secret in (cookie, ticket, csrf))
-with patch.object(a, 'build_opener') as opener:
+with patch.object(a, 'build_opener') as opener, patch.object(a, 'ProxyHandler', return_value=object()) as proxy_handler:
     response = MagicMock(status=200, headers={})
     response.read.return_value = b'{}'
     opener.return_value.open.return_value.__enter__.return_value = response
     a.request_roblox('ticket', cookie, 'fixture-browser', csrf=csrf, place=123)
+    proxy_handler.assert_called_once_with()
     request = opener.return_value.open.call_args.args[0]
     headers = {key.lower(): value for key, value in request.header_items()}
     assert headers['rbxauthenticationnegotiation'] == '1'
     assert headers['x-csrf-token'] == csrf
     assert request.full_url == a.URLS['ticket'] and request.method == 'POST'
 print('Authentication flow checks passed (synthetic sessions only).')
+
+with patch.object(a, 'getproxies', return_value={'https': 'http://fixture-user:fixture-password@proxy.invalid:3128'}):
+    summary = a.network_diagnostic()
+    assert 'detectado: sim' in summary
+    assert all(secret not in summary for secret in ('fixture-user', 'fixture-password', 'proxy.invalid'))
+with patch.object(a, 'getproxies', return_value={}):
+    assert 'detectado: não' in a.network_diagnostic()

@@ -116,3 +116,8 @@ A emissão de tickets inclui o cabeçalho de negociação e mantém uma única r
 ## Versão 0.11.5 — compatibilidade do protocolo de abertura
 
 O campo gameinfo recebe o ticket validado no formato original, como no Roblox Account Manager, sem percent-encoding adicional. A URL do destino continua codificada separadamente. Cada abertura recebe um browserTrackerId não zero, igual no protocolo e na URL do destino. Isso ajusta a passagem dos parâmetros ao launcher registrado; a confirmação do 403 depende do teste no PC afetado. Nenhuma sessão ou ticket é incluído nos diagnósticos.
+
+
+## Versão 0.11.6 — configuração de rede da autenticação
+
+A autenticação deixa de desativar explicitamente os proxies do sistema/ambiente. O diagnóstico informa somente a presença de proxy HTTPS, sem endereços, credenciais ou tickets. PAC, proxies específicos de outros programas e VPNs ainda podem produzir rotas diferentes. A alteração corrige a divergência de configuração; não confirma a causa de um 403 no cliente.

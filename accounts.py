@@ -1,7 +1,7 @@
 """BloxTracker's own local session vault, official-site login helper and game launcher."""
 import os,sys,json,time,re,uuid,base64,threading,subprocess,secrets
 from pathlib import Path
-from urllib.request import Request,build_opener,HTTPRedirectHandler,ProxyHandler
+from urllib.request import Request,build_opener,HTTPRedirectHandler,ProxyHandler,getproxies
 from urllib.error import HTTPError
 from urllib.parse import quote,urlencode
 ROOT=Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'RejoinDesk'
@@ -38,6 +38,15 @@ class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):raise ValueError('Redirecionamento da autenticação recusado. Faça login novamente.')
 
 URLS={'identity':'https://users.roblox.com/v1/users/authenticated','ticket':'https://auth.roblox.com/v1/authentication-ticket/'}
+def network_diagnostic():
+    # Only report presence; proxy URLs may contain credentials.
+    try:
+        proxies = getproxies()
+        enabled = bool(proxies.get("https") or proxies.get("all"))
+        return "Rede da autenticação: configuração padrão do sistema/ambiente; proxy HTTPS detectado: " + ("sim" if enabled else "não") + ". PAC e proxy próprio do launcher podem diferir."
+    except Exception:
+        return "Rede da autenticação: configuração padrão; não foi possível consultar a presença de proxy."
+
 def request_roblox(kind,cookie,ua='',csrf=None,place=None):
     if kind not in URLS or not valid_cookie(cookie):raise ValueError('Sessão local inválida. Adicione a conta novamente.')
     headers={'Cookie':'.ROBLOSECURITY='+cookie,'User-Agent':ua if isinstance(ua,str) and re.fullmatch(r'[\x20-\x7e]{1,512}',ua) else 'RejoinDesk/0.1','Accept':'application/json'}
@@ -47,7 +56,7 @@ def request_roblox(kind,cookie,ua='',csrf=None,place=None):
         if csrf:headers['X-CSRF-TOKEN']=csrf
     request=Request(URLS[kind],headers=headers,data=b'{}' if kind=='ticket' else None,method='POST' if kind=='ticket' else 'GET')
     try:
-        with build_opener(ProxyHandler({}),NoRedirect()).open(request,timeout=15) as response:
+        with build_opener(ProxyHandler(),NoRedirect()).open(request,timeout=15) as response:
             raw=response.read(32769)
             if len(raw)>32768:raise ValueError('Resposta de autenticação inválida.')
             return response.status,dict(response.headers),raw
