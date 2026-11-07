@@ -8,6 +8,7 @@ from tempfile import NamedTemporaryFile
 import accounts
 import theme
 from ui_workspace import WorkspaceUI
+from ui_refinement import semantic_state, status_text
 from queue import Empty, Queue
 from threading import Event, Thread
 import tkinter as tk
@@ -29,12 +30,12 @@ class Desktop(WorkspaceUI):
         root.title(tr('ui_4176882510c1'))
         scale = theme.scale_for(root)
         area_x, area_y, area_width, area_height = theme.work_area(root)
-        width, height = (round(784 * scale), round(301 * scale))
+        width, height = (round(784 * scale), round(380 * scale))
         width = min(width, area_width - 40)
         height = min(height, area_height - 80)
         self.initial_content_size = (width, height)
         root.geometry(f'{width}x{height}{area_x + 20:+d}{area_y + 20:+d}')
-        root.minsize(min(round(720 * scale), area_width - 40), min(round(285 * scale), area_height - 80))
+        root.minsize(min(round(720 * scale), area_width - 40), min(round(350 * scale), area_height - 80))
         root.configure(bg=BG)
         root.option_add('*Font', ('Segoe UI', 9))
         style = ttk.Style(root)
@@ -148,6 +149,7 @@ class Desktop(WorkspaceUI):
         self.table.pack(fill='both', expand=True)
         horizontal = ttk.Scrollbar(accounts_panel, orient='horizontal', command=self.table.xview)
         horizontal.pack(before=table_shell, side='bottom', fill='x')
+        self.horizontal = horizontal
         self.table.configure(xscrollcommand=horizontal.set)
         for tag, color in (('even', '#2d2d2d'), ('odd', '#292929')):
             self.table.tag_configure(tag, background=color)
@@ -160,6 +162,7 @@ class Desktop(WorkspaceUI):
         self.table.bind('<Control-c>', lambda event: self.copy_account('username'))
         compact_panel = tk.Frame(content, bg=PANEL, width=round(236 * scale), padx=8, pady=6)
         compact_panel.grid(row=0, column=1, sticky='nsew')
+        self.compact_panel = compact_panel
         compact_panel.grid_propagate(False)
         compact_panel.columnconfigure(0, weight=1)
         self.label(compact_panel, tr('ui_b54da73fef4e'), size=8, color=MUTED).grid(row=0, column=0, sticky='w')
@@ -177,7 +180,8 @@ class Desktop(WorkspaceUI):
         self.compact_status = self.label(compact_panel, tr('ui_13d8fb6b1ef5'), size=8, color=MUTED, wrap=230)
         self.compact_status.grid(row=4, column=0, sticky='nw')
         compact_panel.rowconfigure(5, weight=1)
-        self.button(compact_panel, tr('ui_c8e4eed80827'), self.toggle_controls).grid(row=6, column=0, sticky='ew', pady=(4, 3))
+        self.profile_button = self.button(compact_panel, tr('ui_c8e4eed80827'), self.toggle_controls)
+        self.profile_button.grid(row=6, column=0, sticky='ew', pady=(4, 3))
         bottom_tools = tk.Frame(compact_panel, bg=PANEL)
         bottom_tools.grid(row=7, column=0, sticky='ew')
         self.button(bottom_tools, tr('ui_eb4d4196e7cc'), self.heartbeat).pack(side='left', fill='x', expand=True, padx=(0, 3))
@@ -188,6 +192,7 @@ class Desktop(WorkspaceUI):
         tools_menu.add_separator()
         tools_menu.add_command(label=tr('ui_1326845d5435'), command=self.toggle_compact)
         tools_menu.add_checkbutton(label=tr('ui_b430235815cd'), variable=self.detail_columns, command=self.set_list_columns)
+        self.tools_button = tools
         tools.configure(menu=tools_menu)
         tools.pack(side='left', fill='x', expand=True)
         root.bind('<Control-f>', lambda event: self.show_search())
@@ -395,7 +400,11 @@ class Desktop(WorkspaceUI):
 
     def button(self, parent, text, action, primary=False):
         button = tk.Button(parent, text=text, command=action, bg='#47698f' if primary else '#414141', fg=TEXT, activebackground='#739fce' if primary else '#505050', activeforeground=TEXT, relief='raised', bd=1, highlightthickness=0, padx=8, pady=3, font=('Segoe UI', 9), cursor='hand2')
-        button._sk_primary = primary
+        button._sk_primary = primary and text == tr('ui_535bc78c9148')
+        button._sk_role = 'primary' if button._sk_primary else 'discreet' if text in (tr('ui_6dd94e23a8f9'), tr('ui_871f24c4cdaf')) else 'secondary'
+        if hasattr(self, 'palette'):
+            theme.style_button(button, self.palette)
+            self.install_tooltip(button, lambda b=button: getattr(b, '_sk_reason', '') if str(b.cget('state')) == 'disabled' else '')
         return button
 
     def entry(self, parent):
@@ -484,7 +493,7 @@ class Desktop(WorkspaceUI):
                 self.table.delete(identity)
             for index, (identity, row) in enumerate(rows.items()):
                 values = (row['username'], self.connection_text(row), '—' if row['age'] is None else tr('ui_54fbd60b2373', p0=row['age']), '—' if row.get('connected') is None else tr('ui_f4587e3c182e', p0=row['connected'] // 60), tr('ui_144ffd9ba321') if not row.get('rejoin') else f"{row['attempts']}/{row['maxAttempts']}" + (tr('ui_1d3f55212ba6') if row['attempts'] >= row['maxAttempts'] else tr('ui_57c5ab791359') if row.get('nextIn') is None else tr('ui_c08d02286152', p0=row['nextIn'])), row.get('jobId', '')[:8] or (tr('ui_8f5e025aa2f8') if state.get('blockACC') and row['age'] is not None else '—'))
-                tags = ('even' if index % 2 == 0 else 'odd',) + (('error',) if self.row_has_error(row) else ('block',) if row['status'].startswith(tr('ui_ead8eeb4740e')) else ('online',) if row['age'] is not None and row['age'] < 20 else ('offline',))
+                tags = ('even' if index % 2 == 0 else 'odd', semantic_state(row))
                 next_cache[identity] = (values, tags)
                 if identity in self.rows:
                     if cache.get(identity) != (values, tags):
@@ -521,6 +530,7 @@ class Desktop(WorkspaceUI):
                 errors = sum((self.row_has_error(row) for row in rows.values()))
                 self.footer_selection.config(text=tr('ui_df71a54f3933', p0=len(self.ids()), p1=errors))
             self.rejoin_status.config(text=tr('ui_9de78c0ac341', p0=state['rejoin'], p1=state['multi'], p2=state.get('startupStatus', ''), p3=state['version']))
+        self.render_refinement()
         self.root.after(4000 if self.economy else 2000, self.refresh)
 
     def show_config(self):
@@ -539,12 +549,7 @@ class Desktop(WorkspaceUI):
 
     @staticmethod
     def connection_text(row):
-        status = row.get('status', '')
-        connection = row.get('connection', '')
-        if status == tr('ui_c3e839df6084'):
-            return '●  ' + (connection or tr('ui_ef40dbe45178'))
-        icon = '!  ' if row.get('errorCode') or 'recusad' in status.lower() or 'erro' in status.lower() else '↻  ' if 'abrindo' in status.lower() or 'aguardando' in status.lower() else '○  '
-        return icon + (connection + ' · ' if connection and connection not in status else '') + status
+        return status_text(row)
 
     def filter_accounts(self):
         query = self.search.get().strip().casefold()
@@ -584,6 +589,8 @@ class Desktop(WorkspaceUI):
         else:
             self.selected_summary.config(text=tr('ui_49a688b3c2ca', p0=len(self.ids())))
 
+        self.render_refinement()
+
     def select_all(self):
         self.table.selection_set(self.table.get_children())
 
@@ -619,6 +626,7 @@ class Desktop(WorkspaceUI):
         if path in ('/launch', '/reconnect') and hasattr(self, 'ui_prefs'):
             recent = self.ui_prefs.get('destinations', [])
             self.ui_prefs['destinations'] = [place] + [p for p in recent if p != place][:7]
+            self.render_refinement()
             self.persist_ui()
         self.run(path, payload)
 
@@ -875,6 +883,7 @@ class Desktop(WorkspaceUI):
         def checked(value, error):
             self.pending = False
             self.last_check = time.strftime('%H:%M')
+            self.render_update_chip(value,error)
             if error:
                 self.notice.config(text=tr('ui_948fd9776678', p0=error))
             elif value['newer'] and value['installable']:
@@ -929,12 +938,15 @@ class Desktop(WorkspaceUI):
         status.pack(anchor='w')
         install = self.button(body, tr('ui_b7cdda093dd6'), lambda: None, True)
         install.config(state='disabled')
+        install._sk_reason = tr('ref_update_disabled')
 
         def check():
             source = repo.get().strip()
             install.config(state='disabled')
 
             def checked(value):
+                self.last_check = time.strftime('%H:%M')
+                self.render_update_chip(value)
                 if not install.winfo_exists():
                     return
                 status.config(text=tr('ui_422bd9c33cfc', p0=value['available']) if value['newer'] else tr('ui_e7d7503dbf9d'))
@@ -947,7 +959,8 @@ class Desktop(WorkspaceUI):
         install.pack(anchor='w')
 
     def add_tray(self, hide):
-        self.button(self.toolbar, tr('ui_65d2e388ad8c'), hide).pack(side='right', padx=6)
+        utilities=self.root.nametowidget(self.menubar.entrycget(1,'menu'))
+        utilities.add_command(label=tr('ui_65d2e388ad8c'),command=hide)
 
     def history(self):
 

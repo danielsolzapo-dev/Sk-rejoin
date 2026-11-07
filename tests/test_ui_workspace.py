@@ -64,7 +64,7 @@ with tempfile.TemporaryDirectory() as directory:
                 assert field.get()==''
             window.destroy()
             ui.column_dialog();ui.command_palette();ui.first_run();root.update()
-            assert root.winfo_width()==784 and root.winfo_height()==301
+            assert root.winfo_width()==784 and root.winfo_height()==380
             assert not list(ui_preferences.location().parent.glob('native-sessions*'))
             print('PASS theme switching, identical snapshots, selection, 100 rows, ordering, validation and undo.')
     finally:

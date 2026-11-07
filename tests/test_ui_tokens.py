@@ -16,7 +16,7 @@ def contrast(a,b):
     return (y+.05)/(x+.05)
 for name,palette in theme.PALETTES.items():
     for text in ('text','muted','accent','success','warning','error','info'):
-        for surface in ('bg','surface','alternate','field'):
+        for surface in ('bg','surface','alternate','field','selection'):
             ratio=contrast(palette[text],palette[surface])
             assert ratio>=4.5,(name,text,surface,ratio)
     assert contrast('#ffffff',palette['primary'])>=4.5

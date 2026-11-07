@@ -7,10 +7,10 @@ FONT = 'Segoe UI'
 FONT_SIZES = {'caption': 8, 'body': 9, 'heading': 12, 'title': 16}
 ROW_HEIGHT = 20
 DARK = dict(bg='#0d131d', surface='#161f2c', border='#3a485b', text='#edf3fc',
-            muted='#aabbd1', accent='#a6caff', success='#91ddb2', warning='#f2d294',
+            muted='#b0c0d5', accent='#a6caff', success='#91ddb2', warning='#f2d294',
             error='#ffacb5', info='#b9d7ff', field='#0c1420', button='#25354b',
             primary='#295788', selection='#254d77', alternate='#121b28', hover='#354b67')
-LIGHT = dict(bg='#eef2f8', surface='#ffffff', border='#9aa9bd', text='#142237',
+LIGHT = dict(bg='#eef2f8', surface='#ffffff', border='#c7d0dd', text='#142237',
              muted='#4c5d75', accent='#1f4f8a', success='#17633e', warning='#795000',
              error='#9e2634', info='#244f87', field='#f8faff', button='#e2e9f3',
              primary='#244f80', selection='#d7e7fb', alternate='#f4f7fc', hover='#cad9ec')
@@ -55,10 +55,10 @@ def apply(root, palette, scale=1.0):
     style = ttk.Style(root)
     style.configure('Treeview', background=palette['surface'], fieldbackground=palette['surface'],
                     foreground=palette['text'], rowheight=round(ROW_HEIGHT*scale), indent=0, borderwidth=0,
-                    bordercolor=palette['border'], font=(FONT, 9))
+                    bordercolor=palette['border'], lightcolor=palette['border'], darkcolor=palette['border'], relief='flat', font=(FONT, 9))
     style.configure('Treeview.Heading', background=palette['button'], foreground=palette['text'],
                     relief='flat', padding=(6, 4), font=(FONT, 9, 'bold'))
-    style.map('Treeview', background=[('selected',palette['selection'])], foreground=[('selected',palette['text'])])
+    style.map('Treeview', background=[('selected',palette['selection'])], foreground=[])
     style.configure('TNotebook', background=palette['bg'], borderwidth=0)
     style.configure('TNotebook.Tab', background=palette['button'], foreground=palette['text'], padding=(12, 6))
     style.map('TNotebook.Tab', background=[('selected',palette['selection'])], foreground=[('selected',palette['text'])])
@@ -79,13 +79,7 @@ def apply(root, palette, scale=1.0):
                 if mapped != current: widget.configure(**{option:mapped})
             except Exception: pass  # ttk options differ by widget; no I/O or business exceptions here.
         if widget.winfo_class() == 'Button':
-            primary = getattr(widget, '_sk_primary', False)
-            widget.configure(bg=palette['primary'] if primary else palette['button'],
-                             fg='#ffffff' if primary else palette['text'],
-                             activebackground=palette['primary'] if primary else palette['hover'],
-                             activeforeground='#ffffff' if primary else palette['text'],
-                             relief='flat', bd=0, highlightthickness=1,
-                             highlightbackground=palette['border'], highlightcolor=palette['accent'])
+            style_button(widget, palette)
         if widget.winfo_class() == 'Menu':
             widget.configure(bg=palette['surface'],fg=palette['text'],activebackground=palette['selection'],activeforeground=palette['text'])
             try:
@@ -99,7 +93,7 @@ def apply(root, palette, scale=1.0):
 
 def scale_for(root):
     """Use Windows DPI rather than Tk's default points-to-pixels rounding."""
-    if os.environ.get('SK_UI_CAPTURE_SCALE') in ('1.0','1.5'):
+    if os.environ.get('SK_UI_CAPTURE_SCALE') in ('1.0','1.25','1.5','2.0'):
         return float(os.environ['SK_UI_CAPTURE_SCALE'])
     if os.name=='nt':
         try:
@@ -128,3 +122,26 @@ def work_area(root):
                 return r.left,r.top,r.right-r.left,r.bottom-r.top
         except (AttributeError,OSError):pass
     return 0,0,root.winfo_screenwidth(),root.winfo_screenheight()
+
+
+def style_button(widget, palette):
+    role=getattr(widget,'_sk_role','primary' if getattr(widget,'_sk_primary',False) else 'secondary')
+    primary=role=='primary'
+    bg=palette['primary'] if primary else widget.master.cget('bg') if role=='discreet' else palette['button']
+    fg='#ffffff' if primary else palette['text']
+    widget.configure(bg=bg, fg=fg, activebackground=palette['selection'] if primary else palette['hover'],
+        activeforeground=fg, disabledforeground=palette['muted'], relief='flat', overrelief='flat', bd=0,
+        highlightthickness=1, highlightbackground=bg, highlightcolor=palette['accent'],
+        padx=8, pady=3, font=(FONT,9), takefocus=True)
+    widget._sk_palette=palette
+    widget._sk_background=bg
+    if not getattr(widget,'_sk_bound',False):
+        widget._sk_bound=True
+        def enter(event):
+            p=widget._sk_palette
+            if str(widget.cget('state'))!='disabled':widget.config(bg=p['hover'] if widget._sk_role!='primary' else p['primary'])
+        def leave(event):widget.config(bg=widget._sk_background)
+        widget.bind('<Enter>',enter,add='+')
+        widget.bind('<Leave>',leave,add='+')
+        widget.bind('<ButtonPress-1>',lambda event:widget.config(relief='sunken') if str(widget.cget('state'))!='disabled' else None,add='+')
+        widget.bind('<ButtonRelease-1>',lambda event:widget.config(relief='flat'),add='+')

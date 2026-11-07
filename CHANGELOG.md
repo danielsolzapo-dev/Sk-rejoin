@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## Refinamento da prévia 0.12.0 — composição compacta
+
+- Colunas medidas pelo conteúdo, Estado flexível, rolagem horizontal condicional e larguras manuais isoladas por usuário.
+- Rodapé com duas linhas, resumo pluralizado, mensagens transitórias e chips de diagnóstico/atualização com foco de teclado.
+- Hierarquia única de botões; painel sem duplicação dos menus Utilitários/Configurações.
+- Estados verde/azul/âmbar/cinza/vermelho, inclusive seleção; bordas claras de 1px, cabeçalho SK discreto, etapa observada e cinco destinos recentes.
+- Smoke de composição em escalas Tk 100/125/150/200 e comparação antes/depois claro/escuro em 100/150. DPI físico e múltiplos monitores permanecem verificações manuais.
+- Nenhuma alteração em autenticação, heartbeat, reconexão, BLOCK ACC ou atualizador.
+
 ## Versão 0.12.0 — Revamp visual 2 (em revisão)
 
 - Temas escuro, claro e sistema; tokens testados para contraste AA e ícones SVG/PNG.

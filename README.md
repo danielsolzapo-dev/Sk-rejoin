@@ -8,13 +8,15 @@ O redesign está na branch `ui/revamp-2`. Não alterou a emissão de tickets, re
 
 ### Antes e depois
 
-![Antes: interface compacta original](docs/screenshots/before-original-100-main.png)
+![Antes: interface compacta original](docs/screenshots/before-dark-100-main.png)
 
 ![Depois: tema escuro](docs/screenshots/after-dark-100-main.png)
 
 ![Depois: tema claro](docs/screenshots/after-light-100-main.png)
 
 As imagens mostram contas fictícias. [Matriz completa](docs/screenshots/) · [Inventário anterior](docs/INVENTARIO_UI.md) · [Validação visual](docs/VALIDACAO_VISUAL.md) · [Histórico](CHANGELOG.md).
+
+A prévia refinada tem rodapé em duas linhas, chips acessíveis, colunas automáticas, estados semânticos e destinos recentes. [Comparação completa](docs/screenshots/comparison.png). As larguras ajustadas manualmente são mantidas nas preferências visuais; a coluna Estado absorve a área restante.
 
 ## Uso rápido
 

@@ -20,3 +20,13 @@
 ## Limites da entrega
 
 O catálogo pt-BR cobre textos de apresentação; textos retornados pelo backend são exibidos sem reescrever o protocolo. Inglês é opcional e ainda não oferecido. Tempos de sessão/ticket/protocolo não são inventados: o backend atual não fornece uma linha do tempo com essas durações. Animações novas não são usadas. CustomTkinter/sv-ttk não foram adicionados: ttk próprio preserva densidade e não acrescenta dependência de tema ao EXE.
+
+## Refinamento compacto de 0.12.0
+
+A base visual anterior está congelada em docs/ui-before/ (somente fixture de captura; não é incluída pelo empacotador). O gerador agora compara esta prévia, e não mais a versão 0.11.8. Captura before/after × dark/light × 100/150 e todos os diálogos. As escalas são simulação Tk em um desktop Windows; não representam certificação de monitores físicos.
+
+O teste test_ui_refinement.py verifica prioridade semântica dos estados, pluralização, tabela com 100 contas, distribuição das colunas, rolagem horizontal condicional, composição do rodapé, cinco destinos, mensagem transitória, cabeçalho sem sufixo de prévia e contenção de controles em 100/125/150/200. O teste de tokens também cobre o fundo de seleção. O Estado usa todo o restante da largura; textos arbitrariamente longos ou todas as colunas extras abertas podem exceder 784px e só então têm tooltip/rolagem.
+
+Etapas são estritamente derivadas dos dados já fornecidos pelo serviço. “Etapa não informada” é usado quando não há confirmação; a UI não inventa sucesso de sessão/ticket/protocolo. Destinos recentes apenas preenchem o campo, sem abrir o jogo.
+
+Verificar manualmente: redimensionamento e arraste das colunas, persistência das larguras ao reabrir, contraste/foco dos chips, mudança de DPI entre monitores físicos, nitidez de arte e ícones a 125/150/200, status muito extenso e campos sensíveis com sessões próprias. O EXE mantém os formatos de dados e serviços existentes.

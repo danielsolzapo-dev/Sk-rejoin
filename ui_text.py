@@ -3,3 +3,18 @@ CATALOG = {'ui_4176882510c1': 'SK Rejoin', 'ui_d78dca84fb22': 'Treeview', 'ui_4b
 
 def tr(key, **values):
     return CATALOG.get(key,key).format(**values)
+
+CATALOG.update({
+'ref_no_signal':'Sem sinal', 'ref_connected':'Conectado', 'ref_selected_one':'selecionada',
+'ref_selected_many':'selecionadas', 'ref_error_one':'erro', 'ref_error_many':'erros',
+'ref_summary':'Contas: {total} · Ativas: {active} · Fila: {queue} · {selected} {selection} · {errors} {error}',
+'ref_brand':'SK Rejoin · 0.12.0', 'ref_version':'SK Rejoin · {version}', 'ref_nick':'Nick',
+'ref_stage':'ETAPA OBSERVADA', 'ref_recent':'DESTINOS RECENTES', 'ref_no_recent':'Nenhum destino usado',
+'ref_stage_heartbeat':'◌ Aguardando heartbeat', 'ref_stage_protocol':'◌ Protocolo / launcher',
+'ref_stage_ticket':'◌ Ticket', 'ref_stage_session':'◌ Sessão', 'ref_stage_unknown':'○ Etapa não informada',
+'ref_select_account':'Selecione uma conta para acompanhar a abertura.'
+})
+
+CATALOG.update({'ref_stage_confirmed':'✓ Heartbeat recebido', 'ref_error_code':'Erro {code} · {text}', 'ref_last_check':'Última verificação: {time}'})
+
+CATALOG.update({'ref_update_disabled':'Verifique se há uma atualização instalável primeiro.'})

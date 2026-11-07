@@ -18,13 +18,10 @@ if os.name!='nt':raise SystemExit('Screenshot matrix requires a Windows desktop.
 from PIL import Image,ImageGrab,ImageOps,ImageDraw
 import tkinter as tk
 os.environ['LOCALAPPDATA']=tempfile.mkdtemp(prefix='sk-ui-fixtures-')
+if args.label=='before':sys.path.insert(0,str(ROOT/'docs'/'ui-before'))
 import theme
 import browser_login
-if args.label=='before':
-    spec=importlib.util.spec_from_file_location('before_desktop',ROOT/'docs'/'desktop-before.py')
-    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);Desktop=module.Desktop
-else:
-    from desktop import Desktop
+from desktop import Desktop
 OUT=ROOT/'docs'/'screenshots';OUT.mkdir(parents=True,exist_ok=True)
 ROWS=[{'userId':i,'username':name,'status':status,'connection':connection,'age':age,'connected':600 if age<20 else None,
        'rejoin':True,'attempts':0,'maxAttempts':3,'nextIn':60,'jobId':'fixture-server-'+str(i),'errorCode':error,
@@ -35,6 +32,7 @@ ROWS=[{'userId':i,'username':name,'status':status,'connection':connection,'age':
           ('sk_orion','Recuperando conexão','Erro 773',2,773)],1)]
 STATE={'accounts':ROWS,'waiting':0,'busy':False,'version':'0.12.0 UI preview','multi':'Múltiplas instâncias observadas',
        'rejoin':5,'startupStatus':'2/4 · WebLauncher — aguardando 10 s','repo':''}
+
 
 def dispatch(self,path,data,callback):
     fixture={'/state':STATE,'/diagnostic':{'checks':['Windows: disponível','Protocolo Roblox registrado','5 processos de exemplo','Ticket HTTP 200 · resgate não verificado']},
@@ -74,7 +72,7 @@ def capture(window,name):
     ImageGrab.grab((x,y,x+w,y+h)).save(OUT/name)
 
 for scale in (1.0,1.5):
- for mode in (('original',) if args.label=='before' else ('dark','light')):
+ for mode in ('dark','light'):
     os.environ['SK_UI_CAPTURE_SCALE']=str(scale)
     root=tk.Tk();root.withdraw();root.tk.call('tk','scaling',96*scale/72)
     with patch.object(Desktop,'refresh'),patch.object(Desktop,'check_startup_update'),patch.object(Desktop,'dispatch',dispatch),patch.object(browser_login,'import_batch',new=AsyncMock(return_value=None)):
@@ -85,7 +83,9 @@ for scale in (1.0,1.5):
             end=time.monotonic()+.2
             while time.monotonic()<end:root.update();time.sleep(.01)
             ui.theme_choice.set(mode);ui.apply_theme(mode);ui.ui_scale=scale;theme.apply(root,ui.palette,scale)
+            if hasattr(ui,'style_refinement'):ui.style_refinement()
         prefix=f'{args.label}-{mode}-{round(scale*100)}'
+        ui.ui_prefs['destinations']=[2753915549,4442272183,7449423635,123456789,987654321]
         ui.table.selection_set('1');ui.account_selected();root.update()
         capture(root,prefix+'-main.png')
         ui.show_config();root.update()
@@ -112,7 +112,7 @@ for scale in (1.0,1.5):
         root.destroy()
 print('SCREENSHOTS_COMPLETE='+args.label)
 if args.label=='after':
-    names=['before-original-100-main.png','after-dark-100-main.png','after-light-100-main.png']
+    names=['before-dark-100-main.png','after-dark-100-main.png','after-light-100-main.png']
     tiles=[]
     for name in names:
         image=Image.open(OUT/name).convert('RGB');image.thumbnail((784,340))

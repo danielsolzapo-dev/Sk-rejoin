@@ -65,7 +65,7 @@ with tempfile.TemporaryDirectory() as folder:
             assert not ui.profile_window.winfo_viewable()
             window.deiconify()
             window.update()
-            assert window.winfo_width() == 784 and window.winfo_height() == 301
+            assert window.winfo_width() == 784 and window.winfo_height() == 380
             assert ui.table.winfo_height() >= 130
             # Synthetic accounts only. Preview is kept in CI logs for visual QA.
             box = (window.winfo_rootx(), window.winfo_rooty(),
@@ -76,11 +76,11 @@ with tempfile.TemporaryDirectory() as folder:
             ui.show_config()
             window.update()
             assert ui.settings_window.winfo_viewable()
-            assert window.winfo_width() == 784 and window.winfo_height() == 301
+            assert window.winfo_width() == 784 and window.winfo_height() == 380
             ui.toggle_controls()
             window.update()
             assert ui.profile_window.winfo_viewable()
-            assert window.winfo_width() == 784 and window.winfo_height() == 301
+            assert window.winfo_width() == 784 and window.winfo_height() == 380
             ui.profile_window.withdraw()
             ui.settings_window.withdraw()
             ui.show_search()

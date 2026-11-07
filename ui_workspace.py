@@ -7,8 +7,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import theme
 import ui_preferences
+from ui_refinement import RefinedUI, semantic_state
 
-class WorkspaceUI:
+class WorkspaceUI(RefinedUI):
 
     def init_workspace(self):
         self.palette = dict(theme.DARK)
@@ -97,6 +98,7 @@ class WorkspaceUI:
         self.table.column('#0', width=round(36 * self.ui_scale), stretch=False, minwidth=32)
         self.load_ui_icons()
         self.apply_theme('dark')
+        self.init_refinement()
 
         def load():
             value = ui_preferences.load()
@@ -118,6 +120,8 @@ class WorkspaceUI:
         for col, width in prefs.get('widths', {}).items():
             if col in self.table['columns'] and type(width) is int and (45 <= width <= 1200):
                 self.table.column(col, width=width)
+        self.user_widths = dict(prefs.get('manualWidths', {}))
+        self.render_refinement()
         self.validate_destination()
         if not prefs.get('onboarded') and (not self.rows):
             self.show_banner(tr('ui_5671c8725752'), self.first_run, tr('ui_8d04ebe0bc07'))
@@ -159,6 +163,7 @@ class WorkspaceUI:
             self.refresh_icon_rows()
         if hasattr(self, 'destination_error'):
             self.destination_error.config(fg=self.palette['error'])
+        self.style_refinement()
 
     def persist_columns(self):
         self.ui_prefs['columns'] = list(self.table['displaycolumns'])
@@ -334,7 +339,9 @@ class WorkspaceUI:
         if not identity:
             return
         row = self.rows.get(identity, {})
-        text = row.get('username', '') + '\n' + self.connection_text(row)
+        text = self.truncated_cell(event)
+        if not text:
+            return
         x, y = (event.x_root, event.y_root)
 
         def show():
@@ -413,26 +420,29 @@ class WorkspaceUI:
         self.action('/reconnect')
 
     def icon_key(self, row):
-        if self.row_has_error(row):
-            return 'error'
-        if row.get('age') is not None and row['age'] < 20:
-            return 'online'
-        if 'abrindo' in row.get('status', '').lower() or 'aguardando' in row.get('status', '').lower():
-            return 'busy'
-        return 'offline'
+        return {'loading':'busy','block':'warning'}.get(semantic_state(row),semantic_state(row))
 
     def load_ui_icons(self):
         from pathlib import Path
         import sys
         assets = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
-        size = 24 if self.ui_scale >= 1.5 else 16
+        size = 24 if self.ui_scale >= 1.5 else 20 if self.ui_scale >= 1.25 else 16
+        target_size=round(16*self.ui_scale)
 
         def load():
+            from PIL import Image
+            import io
             values = {}
             for mode in ('dark', 'light'):
-                for state in ('online', 'offline', 'busy', 'error'):
+                for state in ('online', 'offline', 'busy', 'error', 'warning'):
                     try:
-                        values[mode, state] = (assets / 'artwork' / 'icons' / f'{mode}-{state}-{size}.png').read_bytes()
+                        source='busy' if state=='warning' else state
+                        image=Image.open(assets / 'artwork' / 'icons' / f'{mode}-{source}-{size}.png').convert('RGBA')
+                        if state=='warning':
+                            alpha=image.getchannel('A')
+                            image=Image.new('RGBA',image.size,theme.PALETTES[mode]['warning']);image.putalpha(alpha)
+                        image=image.resize((target_size,target_size),Image.Resampling.LANCZOS)
+                        out=io.BytesIO();image.save(out,format='PNG');values[mode,state]=out.getvalue()
                     except OSError:
                         pass
             try:
@@ -447,6 +457,7 @@ class WorkspaceUI:
         if 'brand' in self.icons:
             self.root.iconphoto(True, self.icons['brand'])
         self.refresh_icon_rows()
+        self.refinement_icons_ready()
 
     def refresh_icon_rows(self):
         mode = 'light' if self.palette == theme.LIGHT else 'dark'
@@ -536,6 +547,7 @@ class WorkspaceUI:
         return bool(row.get('errorCode')) or any((word in status for word in ('erro', 'recusad', 'falhou')))
 
     def update_footer(self):
+        self.render_footer()
         if hasattr(self, 'footer_selection'):
             errors = sum((self.row_has_error(row) for row in self.rows.values()))
             self.footer_selection.config(text=tr('ui_df71a54f3933', p0=len(self.ids()), p1=errors))
