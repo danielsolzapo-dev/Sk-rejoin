@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import accounts as a
 cookie = 'fixture-cookie-' * 4
-ticket = 'fixture-ticket-123456789'
+ticket = 'fixture-ticket-123456789/=='
 csrf = 'fixture-csrf'
 metadata = {'userId': 42, 'username': 'fixture_user'}
 with patch.object(a, 'load_session', return_value=(metadata, {'cookie': cookie, 'ua': 'fixture-browser'})), patch.object(a, 'authenticated', return_value=metadata), patch.object(a, 'SUPPORTED', True), patch.object(a, 'open_game') as opened:
@@ -14,6 +14,14 @@ with patch.object(a, 'load_session', return_value=(metadata, {'cookie': cookie, 
         assert a.launch('fixture_user', 2753915549)
         assert request.call_count == 2 and request.call_args.kwargs['csrf'] == csrf
         assert opened.call_count == 1
+        uri = opened.call_args.args[0]
+        assert '+gameinfo:' + ticket + '+launchtime:' in uri
+        from urllib.parse import unquote, urlparse, parse_qs
+        tracker = uri.split('+browsertrackerid:')[1].split('+')[0]
+        destination = unquote(uri.split('+placelauncherurl:')[1].split('+browsertrackerid:')[0])
+        assert parse_qs(urlparse(destination).query)['browserTrackerId'] == [tracker]
+        assert tracker.isdigit() and tracker != '0'
+        assert parse_qs(urlparse(destination).query)['placeId'] == ['2753915549']
         assert a.auth_diagnostics()[0]['handedOff']
     opened.reset_mock()
     with patch.object(a, 'request_roblox', return_value=(403, {}, b'')) as request:

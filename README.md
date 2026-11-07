@@ -111,3 +111,8 @@ A opção Nick e senha (User:Pass) agora abre diretamente um único campo de tex
 ## Versão 0.11.4 — diagnóstico de autenticação
 
 A emissão de tickets inclui o cabeçalho de negociação e mantém uma única renovação CSRF fornecida pelo Roblox. Verificações adicionais interrompem a abertura e pedem login oficial. Utilitários → Testar autenticação valida uma conta selecionada e informa a etapa e o HTTP sem exibir cookies ou tickets. Diagnóstico mostra as últimas tentativas, apenas durante esta execução. Um ticket emitido não garante que o launcher/cliente conseguirá autenticar: um 403 posterior ainda exige verificar essa etapa no PC afetado.
+
+
+## Versão 0.11.5 — compatibilidade do protocolo de abertura
+
+O campo gameinfo recebe o ticket validado no formato original, como no Roblox Account Manager, sem percent-encoding adicional. A URL do destino continua codificada separadamente. Cada abertura recebe um browserTrackerId não zero, igual no protocolo e na URL do destino. Isso ajusta a passagem dos parâmetros ao launcher registrado; a confirmação do 403 depende do teste no PC afetado. Nenhuma sessão ou ticket é incluído nos diagnósticos.

@@ -1,5 +1,5 @@
 """BloxTracker's own local session vault, official-site login helper and game launcher."""
-import os,sys,json,time,re,uuid,base64,threading,subprocess
+import os,sys,json,time,re,uuid,base64,threading,subprocess,secrets
 from pathlib import Path
 from urllib.request import Request,build_opener,HTTPRedirectHandler,ProxyHandler
 from urllib.error import HTTPError
@@ -162,8 +162,9 @@ def launch(username,place,job='',before_open=None):
     report = {"sessionValid": False, "csrfRetry": False, "ticketIssued": False, "handedOff": False}
     try:
         ticket = _prepare_ticket(username, place, report)
-        destination='https://assetgame.roblox.com/game/PlaceLauncher.ashx?'+urlencode({'request':'RequestGameJob' if job else 'RequestGame','browserTrackerId':0,'placeId':place,'isPlayTogetherGame':'false',**({'gameId':job} if job else {})})
-        uri='roblox-player:1+launchmode:play+gameinfo:'+quote(ticket,safe='')+'+launchtime:'+str(int(time.time()*1000))+'+placelauncherurl:'+quote(destination,safe='')+'+browsertrackerid:0+robloxLocale:pt_br+gameLocale:pt_br+channel:+LaunchExp:InApp'
+        browser_tracker = str(secrets.randbelow(9_000_000_000) + 1_000_000_000)
+        destination='https://assetgame.roblox.com/game/PlaceLauncher.ashx?'+urlencode({'request':'RequestGameJob' if job else 'RequestGame','browserTrackerId':browser_tracker,'placeId':place,'isPlayTogetherGame':'false',**({'gameId':job} if job else {})})
+        uri='roblox-player:1+launchmode:play+gameinfo:'+ticket+'+launchtime:'+str(int(time.time()*1000))+'+placelauncherurl:'+quote(destination,safe='')+'+browsertrackerid:'+browser_tracker+'+robloxLocale:pt_br+gameLocale:pt_br+channel:+LaunchExp:InApp'
         if before_open is not None and not before_open():raise LaunchCancelled('Reconexão cancelada após a conferência final.')
         report["stage"] = "launcher"
         try:open_game(uri)
