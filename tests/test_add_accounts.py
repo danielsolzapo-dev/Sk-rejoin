@@ -72,6 +72,28 @@ with tempfile.TemporaryDirectory() as folder:
                 real_password(ui)
                 titles=[child.title() for child in window.winfo_children() if isinstance(child,tk.Toplevel)]
                 assert 'Importar sessões' in titles and 'Adicionar por nick e senha' in titles
+                password_window=next(child for child in window.winfo_children() if isinstance(child,tk.Toplevel) and child.title()=='Adicionar por nick e senha')
+                def children(widget):
+                    result=[]
+                    for child in widget.winfo_children():
+                        result.append(child)
+                        result.extend(children(child))
+                    return result
+                widgets=children(password_window)
+                text_fields=[widget for widget in widgets if isinstance(widget,tk.Text)]
+                assert len(text_fields)==1 and not any(isinstance(widget,tk.Entry) for widget in widgets)
+                pasted=text_fields[0]
+                pasted.insert('1.0','first_one:fixture:colon\nsecond_two:fixture-two')
+                start=next(widget for widget in widgets if isinstance(widget,tk.Button) and widget.cget('text')=='Entrar e adicionar contas')
+                with patch.object(login,'import_batch',new=AsyncMock(return_value=None)) as imported:
+                    start.invoke()
+                    deadline=time.monotonic()+3
+                    while ui.pending and time.monotonic()<deadline:
+                        window.update()
+                        time.sleep(.02)
+                    assert not ui.pending
+                    assert imported.await_args.args[0]==[('first_one','fixture:colon'),('second_two','fixture-two')]
+                    assert pasted.get('1.0','end-1c')==''
                 with patch.object(login,'import_batch',new=AsyncMock(return_value=None)):
                     real_manual(ui)
                     deadline=time.monotonic()+3

@@ -941,27 +941,28 @@ class Desktop:
         window.geometry("700x530")
         self.label(body, "Até 6 contas. Serão abertas até 3 janelas de login por vez.",
                    color=MUTED, wrap=640).pack(anchor="w")
-        modes = ttk.Notebook(body)
-        modes.pack(fill="x", pady=8)
-        fields_page = tk.Frame(modes, bg=PANEL)
-        paste_page = tk.Frame(modes, bg=PANEL)
-        modes.add(fields_page, text="Preencher contas")
-        modes.add(paste_page, text="User:Pass em lote")
-        fields = []
-        for _ in range(6):
-            row = tk.Frame(fields_page, bg=PANEL)
-            row.pack(fill="x", pady=3)
-            self.label(row, "Nick").pack(side="left", padx=5)
-            nick = self.entry(row)
-            nick.pack(side="left", fill="x", expand=True, ipady=3)
-            self.label(row, "Senha").pack(side="left", padx=5)
-            password = self.entry(row)
-            password.config(show="•")
-            password.pack(side="left", fill="x", expand=True, ipady=3)
-            fields.append((nick, password))
-        self.label(paste_page, "Cole uma conta por linha no formato nick:senha.", color=MUTED).pack(anchor="w", pady=6)
-        pasted = tk.Text(paste_page, bg=BG, fg=TEXT, insertbackground=TEXT, height=8, wrap="none")
-        pasted.pack(fill="x")
+        self.label(body, "Cole uma conta por linha no formato nick:senha.",
+                   color=MUTED, wrap=640).pack(anchor="w", pady=(8, 3))
+        pasted = tk.Text(body, bg=BG, fg=TEXT, insertbackground=TEXT, height=10, wrap="none",
+                         font=("Consolas", 10), undo=False)
+        pasted.pack(fill="x", pady=(0, 6))
+        detected = self.label(body, "Nenhuma conta informada.", color=MUTED, wrap=640)
+        detected.pack(anchor="w")
+        def recognize(event=None):
+            if not pasted.edit_modified():
+                return
+            pasted.edit_modified(False)
+            text = pasted.get("1.0", "end-1c")
+            if not text.strip():
+                detected.config(text="Nenhuma conta informada.")
+                return
+            try:
+                rows = browser_login.parse_credentials(text)
+                detected.config(text=f"{len(rows)} conta(s) reconhecida(s).")
+            except ValueError as error:
+                detected.config(text=str(error))
+        pasted.bind("<<Modified>>", recognize)
+        pasted.focus_set()
         status = self.label(body, "", color=MINT, wrap=640)
         status.pack(anchor="w", pady=8)
         cancel = Event()
@@ -974,22 +975,17 @@ class Desktop:
             if self.pending:
                 status.config(text="Aguarde a operação atual.")
                 return
-            if modes.index("current") == 1:
-                try:
-                    credentials = browser_login.parse_credentials(pasted.get("1.0", "end-1c"))
-                except ValueError as error:
-                    status.config(text=str(error))
-                    return
-            else:
-                credentials = [(nick.get().strip(), password.get()) for nick, password in fields if nick.get().strip() or password.get()]
+            try:
+                credentials = browser_login.parse_credentials(pasted.get("1.0", "end-1c"))
+            except ValueError as error:
+                status.config(text=str(error))
+                return
             if not credentials or len(credentials) > 6 or any(not accounts.USERNAME.fullmatch(nick) or not password for nick, password in credentials):
                 status.config(text="Preencha de 1 a 6 contas com nick válido e senha.")
                 return
             if len({nick.casefold() for nick, _ in credentials}) != len(credentials):
                 status.config(text="Cada nick deve aparecer uma vez.")
                 return
-            for _, password in fields:
-                password.delete(0, "end")
             pasted.delete("1.0", "end")
             self.pending = True
             start.config(state="disabled")
@@ -1017,8 +1013,7 @@ class Desktop:
         def close():
             cancel.set()
             pasted.delete("1.0", "end")
-            for _, password in fields:
-                password.delete(0, "end")
             window.destroy()
         window.protocol("WM_DELETE_WINDOW", close)
+
 

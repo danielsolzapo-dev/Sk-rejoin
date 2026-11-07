@@ -102,3 +102,7 @@ Login manual abre um navegador isolado em www.roblox.com/login. Entre na conta e
 User:Pass permite preencher até 6 contas ou colar nick:senha, uma por linha. Senhas que contêm dois-pontos são preservadas. Até 3 janelas são abertas em paralelo. Os campos são limpos ao iniciar ou fechar a importação. Cookies mantém a importação existente, uma sessão por linha.
 
 A captura usa apenas a sessão do contexto de login aberto pelo APP e o User-Agent desse navegador. A sessão continua protegida pelo Windows no PC local. Nenhum cookie é enviado ao Tracker.
+
+## Versão 0.11.3 — User:Pass em campo único
+
+A opção Nick e senha (User:Pass) agora abre diretamente um único campo de texto. Cole nick:senha, uma conta por linha. O APP reconhece e conta as linhas válidas automaticamente. Senhas com dois-pontos continuam preservadas. Permanecem o limite de 6 contas por lote e até 3 navegadores simultâneos. Os dados digitados são limpos ao iniciar ou fechar a importação.
