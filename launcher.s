@@ -1,3 +1,4 @@
+/* LEGACY: not used by the supported PyInstaller build. See docs/AUDITORIA.md. */
 /* Minimal Windows x64 launcher. The app itself runs in Python. */
 .text
 .globl main

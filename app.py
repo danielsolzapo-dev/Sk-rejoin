@@ -16,6 +16,8 @@ import optimization
 import server_picker
 import startup
 import bridge_commands
+import json_store
+from redaction import redact
 
 ASSETS = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
 KEY = accounts.read(accounts.ROOT / "heartbeat-key.json", None) or secrets.token_urlsafe(32)
@@ -80,6 +82,7 @@ HISTORY = accounts.ROOT / "sk-history.json"
 SETTINGS = accounts.ROOT / "sk-settings.json"
 QUEUE_CANCEL = threading.Event()
 WAITING = 0
+QUEUE_SLOT_TIMEOUT = 120
 PROFILES = accounts.ROOT / "sk-account-profiles.json"
 BINDINGS = {}
 SERVER_TARGETS = {}
@@ -117,7 +120,7 @@ def startup_sequence():
 def record(identity, event):
     with LOCK:
         entries = accounts.read(HISTORY, [])
-        entries.append({"time": time.strftime("%Y-%m-%d %H:%M:%S"), "account": identity, "event": event})
+        entries.append({"time": time.strftime("%Y-%m-%d %H:%M:%S"), "account": identity, "event": redact(event)})
         accounts.write(HISTORY, entries[-500:])
 
 def save_profiles():
@@ -154,12 +157,13 @@ def diagnostic():
             checks.append("Protocolo Roblox registrado" if command else "Protocolo Roblox vazio")
         except OSError:
             checks.append("Protocolo Roblox ausente. Abra um jogo pelo site oficial neste PC.")
+    checks.extend(json_store.notices())
     checks.append(accounts.network_diagnostic())
     checks.append("Sessões locais cadastradas: " + str(len(accounts.accounts())))
     checks.append("Reconexão aguarda um heartbeat desta execução do app antes de monitorar cada conta.")
     for row in accounts.auth_diagnostics():
         checks.append(f"Autenticação {row['account']}: etapa {row.get('stage', '—')} · ticket HTTP {row.get('ticketHTTP', '—')} · enviado ao launcher: {'sim' if row.get('handedOff') else 'não'}. {row.get('message', '')}")
-    return checks
+    return [redact(check) for check in checks]
 
 
 def block_enabled():
@@ -321,7 +325,10 @@ def start_job(value, *, remember_place=True):
                         BLOCK_DIAG.pop(identity, None)
                     record(row["username"], "Rejoin da janela vinculada solicitado")
                 limit = settings["limit"]
+                slot_deadline = time.monotonic() + QUEUE_SLOT_TIMEOUT
                 while len(windows.running()) >= limit:
+                    if time.monotonic() >= slot_deadline:
+                        raise ValueError("Tempo de espera pelo limite de instâncias esgotado. Libere uma janela e tente novamente.")
                     with LOCK:
                         STATUS[identity] = f"Limite configurado atingido ({limit} instâncias)"
                     if QUEUE_CANCEL.wait(1):
@@ -404,6 +411,8 @@ def start_job(value, *, remember_place=True):
                         break
 
         except (ValueError, OSError) as error:
+            with LOCK:
+                STATUS[identity] = "Erro na abertura · " + str(error)
             record("Fila", str(error))
         finally:
             with LOCK:
@@ -828,7 +837,7 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(404, {"error": "Rota indisponível."})
         except (ValueError, TypeError, AttributeError, OSError):
             error = sys.exc_info()[1]
-            self.reply(400, {"error": str(error) if type(error) is ValueError else "Operação indisponível. Confira a configuração e a conexão."})
+            self.reply(400, {"error": redact(error) if type(error) is ValueError else "Operação indisponível. Confira a configuração e a conexão."})
 
 def watch_once():
     with LOCK:

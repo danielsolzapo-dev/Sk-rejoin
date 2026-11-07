@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import accounts
+from redaction import redact
 from queue import Empty, Queue
 from threading import Event, Thread
 import tkinter as tk
@@ -443,7 +444,7 @@ class Desktop:
                 result = self.request(path, data)
                 self.events.put((callback, result, None))
             except Exception as error:
-                self.events.put((callback, None, str(error)))
+                self.events.put((callback, None, redact(error)))
         Thread(target=worker, daemon=True).start()
 
     def drain(self):
@@ -480,6 +481,8 @@ class Desktop:
         else:
             self.state = state
             rows = {str(row["userId"]): row for row in state["accounts"]}
+            rendered = getattr(self, "rendered_rows", {})
+            next_rendered = {}
             for identity in self.rows.keys() - rows.keys():
                 self.table.delete(identity)
             for index, (identity, row) in enumerate(rows.items()):
@@ -489,10 +492,13 @@ class Desktop:
                            (' · limite atingido' if row['attempts'] >= row['maxAttempts'] else ' · aguardando sinal' if row.get('nextIn') is None else f' · {row["nextIn"]}s')),
                           row.get('jobId', '')[:8] or ('Atualizar HB' if state.get('blockACC') and row['age'] is not None else '—'))
                 tags = ("even" if index % 2 == 0 else "odd",) + (("error",) if row.get("errorCode") else ("block",) if row["status"].startswith("BLOCK ACC") else ("online",) if row["age"] is not None and row["age"] < 20 else ("offline",))
+                next_rendered[identity] = (values, tags)
                 if identity in self.rows:
-                    self.table.item(identity, values=values, tags=tags)
+                    if rendered.get(identity) != (values, tags):
+                        self.table.item(identity, values=values, tags=tags)
                 else:
                     self.table.insert("", "end", iid=identity, values=values, tags=tags)
+            self.rendered_rows = next_rendered
             self.rows = rows
             if hasattr(self, "search"):
                 self.filter_accounts()
@@ -749,7 +755,15 @@ class Desktop:
     def diagnostic(self):
         def show(value):
             body = self.dialog("Diagnóstico de abertura")
-            self.label(body, "\n\n".join(value["checks"]), wrap=520).pack(anchor="w")
+            field = tk.Text(body, bg=BG, fg=TEXT, wrap="word", height=18)
+            report = "SK Rejoin " + self.state.get("version", "—") + "\n\n" + "\n\n".join(value["checks"])
+            field.insert("1.0", report)
+            field.config(state="disabled")
+            field.pack(fill="both", expand=True)
+            def copy():
+                self.root.clipboard_clear()
+                self.root.clipboard_append(report)
+            self.button(body, "Copiar diagnóstico", copy).pack(anchor="w", pady=8)
         self.run("/diagnostic", {}, show)
 
     def launch(self):

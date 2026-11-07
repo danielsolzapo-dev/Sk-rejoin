@@ -11,12 +11,8 @@ LOCK=threading.RLock()
 SUPPORTED=os.name=='nt'
 USERNAME=re.compile(r'[A-Za-z0-9_]{3,20}\Z')
 
-def read(path,default):
-    try:return json.loads(path.read_text(encoding='utf-8'))
-    except (OSError,ValueError):return default
-
-def write(path,value):
-    temporary=path.with_suffix(path.suffix+'.tmp');temporary.write_text(json.dumps(value,ensure_ascii=False),encoding='utf-8');temporary.replace(path)
+# Keep public helpers and legacy JSON shapes for existing integrations.
+from json_store import read, write
 
 def protect(raw,decrypt=False):
     if not SUPPORTED:raise ValueError('O gerenciador próprio usa a proteção de sessões do Windows.')
