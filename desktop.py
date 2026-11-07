@@ -29,7 +29,7 @@ class Desktop(WorkspaceUI):
         root.title(tr('ui_4176882510c1'))
         if (assets / 'artwork' / 'sk.ico').exists():
             root.iconbitmap(str(assets / 'artwork' / 'sk.ico'))
-        scale = max(1.0, root.winfo_fpixels('1i') / 96)
+        scale = theme.scale_for(root)
         width, height = (round(784 * scale), round(301 * scale))
         width = min(width, root.winfo_screenwidth() - 40)
         height = min(height, root.winfo_screenheight() - 80)
@@ -329,6 +329,9 @@ class Desktop(WorkspaceUI):
         self.button(actions, tr('ui_ab71f8e40f0e'), self.choose_bootstrapper).pack(side='left')
         self.label(tools, tr('ui_96a9579f63aa'), color=MUTED, wrap=850).pack(anchor='w', pady=(10, 0))
 
+        for name,page in [('Geral',general),('Inicialização',boot),('Reconexão',reconnection),('Desempenho',performance),('Aparência',appearance)]:
+            self.button(page,'Restaurar campos padrão',lambda n=name:self.reset_section(n)).pack(anchor='w',padx=16,pady=12)
+
     def show_optimization(self):
         self.show_config()
         self.config_sections.select(3)
@@ -504,6 +507,7 @@ class Desktop(WorkspaceUI):
                 self.startup_update_checked = True
                 self.check_startup_update(state['repo'])
             self.config_multi.config(text=state['multi'])
+            if hasattr(self,'version_chip'):self.version_chip.config(text='SK Rejoin '+state['version'])
             if hasattr(self,"startup_progress"):self.startup_progress.config(text=state.get("startupStatus", ""))
             if hasattr(self,"footer_selection"):
                 errors=sum(bool(row.get("errorCode")) for row in rows.values())

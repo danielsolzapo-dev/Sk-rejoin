@@ -13,7 +13,7 @@ class WorkspaceUI:
     def init_workspace(self):
         self.palette = dict(theme.DARK)
         self.ui_prefs = dict(ui_preferences.DEFAULTS)
-        self.ui_scale = max(1.0, self.root.winfo_fpixels('1i') / 96)
+        self.ui_scale = theme.scale_for(self.root)
         self.sort_column = 'account'
         self.sort_reverse = False
         self.row_cache = {}
@@ -62,7 +62,14 @@ class WorkspaceUI:
         self.install_tooltip(self.place,'Place ID numérico. Pressione ↓ para ver destinos recentes.')
         for variable in (self.start_windows,self.companion_enabled,self.start_weblauncher,self.start_accounts):
             variable.trace_add('write',lambda *args:setattr(self,'ui_config_dirty',True))
-        self.last_check = '—'  
+        self.statusbar=tk.Frame(self.workspace)
+        self.statusbar.pack(before=self.tabs,side='bottom',fill='x',pady=(2,0))
+        self.version_chip=self.label(self.statusbar,'SK Rejoin',size=8,color=self.palette['muted'])
+        self.version_chip.pack(side='left',padx=(0,8))
+        self.button(self.statusbar,'Diagnóstico',self.diagnostic).pack(side='left',padx=2)
+        self.update_chip=self.button(self.statusbar,'Atualizações',self.updates)
+        self.update_chip.pack(side='right')
+        self.last_check = '—'   
         self.icons = {}
         self.table.configure(show="tree headings")
         self.table.column("#0",width=round(24*self.ui_scale),stretch=False,minwidth=20)
@@ -80,6 +87,7 @@ class WorkspaceUI:
         self.ui_prefs = prefs
         self.system_theme = system
         self.minimize_option.set(bool(prefs.get('minimizeToTray', True)))
+        self.notify_option.set(bool(prefs.get('notifications',False)))
         self.theme_choice.set(prefs.get('theme', 'dark'))
         self.apply_theme(system if self.theme_choice.get() == 'system' else self.theme_choice.get())
         columns = [c for c in prefs.get('columns', []) if c in self.table['columns']]
@@ -320,6 +328,10 @@ class WorkspaceUI:
             self.persist_ui()
         tk.Checkbutton(general, text=tr('ui_120f4fd08e81'), variable=self.minimize_option, command=minimize).pack(anchor='w', padx=16, pady=8)
         self.button(general, tr('ui_e4aab1a357fe'), self.first_run).pack(anchor='w', padx=16, pady=8)
+        self.notify_option=tk.BooleanVar(value=False)
+        def notify():
+            self.ui_prefs['notifications']=self.notify_option.get();self.persist_ui()
+        tk.Checkbutton(general,text='Notificações opcionais para erros de conexão',variable=self.notify_option,command=notify).pack(anchor='w',padx=16,pady=6)
         self.label(reconnection, tr('ui_c0e8b360a6b3'), size=14, bold=True).pack(anchor='w', padx=16, pady=12)
         self.label(reconnection, tr('ui_8cc542df4c1a'), wrap=630).pack(anchor='w', padx=16, pady=8)
         self.button(reconnection, tr('ui_ffb6856e5ba3'), self.toggle_controls, True).pack(anchor='w', padx=16, pady=8)
@@ -365,6 +377,7 @@ class WorkspaceUI:
         self.tray_hide = hide
 
     def reconnect_all(self):
+        self.search.set('');self.state_filter.set('Todas');self.filter_accounts()
         self.select_all()
         self.action('/reconnect')
 
@@ -427,3 +440,21 @@ class WorkspaceUI:
                 403:'Autenticação recusada. Abra o diagnóstico para conferir a etapa.',
                 415:'Formato da requisição recusado. Confira a versão do APP.',
                 429:'Muitas solicitações. Aguarde antes de tentar novamente.'}.get(code,'')
+
+    def reset_section(self,name):
+        # Reset editable presentation fields only. Existing Save/Apply actions remain explicit.
+        fields={
+            'Inicialização':[(self.companion_path,''),*( (field,'10' if key=='webLauncherDelay' else '20') for key,field in self.start_delays.items())],
+            'Reconexão':[(self.rejoin_delay,'20'),(self.max_attempts,'3'),(self.profile_fps,'10'),(self.dimensions['limit'],'2'),(self.dimensions['width'],'320'),(self.dimensions['height'],'240')],
+            'Desempenho':[(self.opt_fps,'10'),(self.opt_folder,'')],
+        }
+        for field,value in fields.get(name,[]):field.delete(0,'end');field.insert(0,value)
+        if name=='Inicialização':
+            for variable in (self.start_windows,self.companion_enabled,self.start_accounts):variable.set(False)
+            self.start_weblauncher.set(True)
+        if name=='Aparência':self.choose_theme('dark')
+        if name=='Geral':
+            self.minimize_option.set(True);self.notify_option.set(False)
+            self.ui_prefs.update(minimizeToTray=True,notifications=False);self.persist_ui()
+        self.ui_config_dirty=bool(fields.get(name))
+        self.notice.config(text='Campos restaurados. Salve ou aplique pela ação da seção para alterar o comportamento.')

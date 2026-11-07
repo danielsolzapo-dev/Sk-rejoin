@@ -20,6 +20,7 @@ def attach(root, assets, callbacks=None, state=None, preferences=None):
             items = [(tr('ui_25de7deebb0e'), 'toggle'), (tr('ui_d98fa42977b6'), 'pause'), (tr('ui_240f5d622131'), 'reconnect'), (tr('ui_7b5d3cf0ada7'), 'config'), (tr('ui_dbdc71231635'), 'updates'), (tr('ui_3ffa2a9e9b4d'), 'exit')]
             icon = pystray.Icon('sk-rejoin', image, tr('ui_4176882510c1'), pystray.Menu(*[pystray.MenuItem(label, post(action), default=action == 'toggle') for label, action in items]))
             holder['icon'] = icon
+            holder['image'] = image
             icon.run_detached()
         except Exception:
             events.put('unavailable')
@@ -58,6 +59,17 @@ def attach(root, assets, callbacks=None, state=None, preferences=None):
                 last_status = summary
                 icon = holder['icon']
                 Thread(target=lambda: setattr(icon, 'title', tr('ui_3b34fef83c49') + summary), daemon=True).start()
+                def update_icon(value=summary):
+                    from PIL import ImageDraw
+                    image=holder['image'].copy()
+                    color='#ba3346' if value=='Atenção' else '#9b6a10' if value=='Reconectando' else '#287545'
+                    draw=ImageDraw.Draw(image);size=image.width
+                    draw.ellipse((size*.64,size*.64,size*.96,size*.96),fill=color,outline='white',width=max(1,size//40))
+                    icon.icon=image
+                    if preferences and preferences().get('notifications') and value=='Atenção':
+                        try:icon.notify('Confira as contas no SK Rejoin.','Conexão precisa de atenção')
+                        except Exception:pass
+                Thread(target=update_icon,daemon=True).start()
         root.after(200, poll)
 
     def stop(event):

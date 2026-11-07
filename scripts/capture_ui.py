@@ -51,6 +51,7 @@ def capture(window,name):
 
 for scale in (1.0,1.5):
  for mode in (('original',) if args.label=='before' else ('dark','light')):
+    os.environ['SK_UI_CAPTURE_SCALE']=str(scale)
     root=tk.Tk();root.withdraw();root.tk.call('tk','scaling',96*scale/72)
     with patch.object(Desktop,'refresh'),patch.object(Desktop,'check_startup_update'),patch.object(Desktop,'dispatch',dispatch),patch.object(browser_login,'import_batch',new=AsyncMock(return_value=None)):
         ui=Desktop(root,49327,'fixture-key',ROOT,{'place':2753915549})

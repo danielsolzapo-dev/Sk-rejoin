@@ -96,3 +96,17 @@ def apply(root, palette, scale=1.0):
         for child in widget.winfo_children(): walk(child)
     walk(root)
     root.configure(bg=palette['bg'])
+
+def scale_for(root):
+    """Use Windows DPI rather than Tk's default points-to-pixels rounding."""
+    if os.environ.get('SK_UI_CAPTURE_SCALE') in ('1.0','1.5'):
+        return float(os.environ['SK_UI_CAPTURE_SCALE'])
+    if os.name=='nt':
+        try:
+            import ctypes
+            fn=ctypes.windll.user32.GetDpiForWindow
+            fn.argtypes=[ctypes.c_void_p];fn.restype=ctypes.c_uint
+            dpi=fn(root.winfo_id())
+            if dpi:return max(1.0,dpi/96)
+        except (AttributeError,OSError):pass
+    return max(1.0,round(root.winfo_fpixels('1i')/96*4)/4)
