@@ -483,7 +483,7 @@ class Desktop(WorkspaceUI):
                 self.table.delete(identity)
             for index, (identity, row) in enumerate(rows.items()):
                 values = (row['username'], self.connection_text(row), '—' if row['age'] is None else tr('ui_54fbd60b2373', p0=row['age']), '—' if row.get('connected') is None else tr('ui_f4587e3c182e', p0=row['connected'] // 60), tr('ui_144ffd9ba321') if not row.get('rejoin') else f"{row['attempts']}/{row['maxAttempts']}" + (tr('ui_1d3f55212ba6') if row['attempts'] >= row['maxAttempts'] else tr('ui_57c5ab791359') if row.get('nextIn') is None else tr('ui_c08d02286152', p0=row['nextIn'])), row.get('jobId', '')[:8] or (tr('ui_8f5e025aa2f8') if state.get('blockACC') and row['age'] is not None else '—'))
-                tags = ('even' if index % 2 == 0 else 'odd',) + (('error',) if row.get('errorCode') else ('block',) if row['status'].startswith(tr('ui_ead8eeb4740e')) else ('online',) if row['age'] is not None and row['age'] < 20 else ('offline',))
+                tags = ('even' if index % 2 == 0 else 'odd',) + (('error',) if self.row_has_error(row) else ('block',) if row['status'].startswith(tr('ui_ead8eeb4740e')) else ('online',) if row['age'] is not None and row['age'] < 20 else ('offline',))
                 next_cache[identity] = (values, tags)
                 if identity in self.rows:
                     if cache.get(identity) != (values, tags):
@@ -552,7 +552,7 @@ class Desktop(WorkspaceUI):
         for identity, row in self.row_order() if hasattr(self, 'sort_column') else self.rows.items():
             fresh = row.get('age') is not None and row['age'] < 20
             match = query in (row.get('username', '') + ' ' + identity).casefold()
-            match = match and (category == tr('ui_8a3c3440366a') or (category == tr('ui_0c661608c587') and fresh and (row.get('connection') == tr('ui_ef40dbe45178'))) or (category == tr('ui_b419880b4c70') and fresh and (row.get('connection') == tr('ui_b419880b4c70'))) or (category == tr('ui_09763d9fa8a7') and (not fresh)) or (category == tr('ui_0748e2f5bdcf') and bool(row.get('errorCode'))) or (category == tr('ui_ead8eeb4740e') and row.get('status', '').startswith(tr('ui_ead8eeb4740e'))))
+            match = match and (category == tr('ui_8a3c3440366a') or (category == tr('ui_0c661608c587') and fresh and (row.get('connection') == tr('ui_ef40dbe45178'))) or (category == tr('ui_b419880b4c70') and fresh and (row.get('connection') == tr('ui_b419880b4c70'))) or (category == tr('ui_09763d9fa8a7') and (not fresh)) or (category == tr('ui_0748e2f5bdcf') and self.row_has_error(row)) or (category == tr('ui_ead8eeb4740e') and row.get('status', '').startswith(tr('ui_ead8eeb4740e'))))
             if match:
                 if identity not in self.table.get_children() or self.table.index(identity) != visible:
                     self.table.move(identity, '', visible)
@@ -564,6 +564,7 @@ class Desktop(WorkspaceUI):
         self.selection_info.config(text=tr('ui_4a62e217880b', p0=len(self.table.selection())))
 
     def account_selected(self, event=None):
+        self.update_footer()
         if hasattr(self, 'palette'):
             self.root.after_idle(self.validate_destination)
         self.load_profile(event)

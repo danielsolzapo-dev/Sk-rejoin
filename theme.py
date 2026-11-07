@@ -54,7 +54,7 @@ def apply(root, palette, scale=1.0):
     # Native themed controls keep keyboard/focus behavior and do not grow the EXE.
     style = ttk.Style(root)
     style.configure('Treeview', background=palette['surface'], fieldbackground=palette['surface'],
-                    foreground=palette['text'], rowheight=round(ROW_HEIGHT*scale), borderwidth=0,
+                    foreground=palette['text'], rowheight=round(ROW_HEIGHT*scale), indent=0, borderwidth=0,
                     bordercolor=palette['border'], font=(FONT, 9))
     style.configure('Treeview.Heading', background=palette['button'], foreground=palette['text'],
                     relief='flat', padding=(6, 4), font=(FONT, 9, 'bold'))

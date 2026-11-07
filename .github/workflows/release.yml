@@ -26,6 +26,7 @@ jobs:
       - run: python tests/test_session_upgrade.py
       - run: python tests/test_unified.py
       - run: python tests/test_add_accounts.py
+      - run: python tests/test_ui_workspace.py
       - run: python tests/test_visual.py
       - run: python scripts/capture_ui.py --label before
       - run: python scripts/capture_ui.py --label after

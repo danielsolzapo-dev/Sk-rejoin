@@ -47,6 +47,15 @@ def dispatch(self,path,data,callback):
 def capture(window,name):
     window.update_idletasks();window.update()
     x,y=window.winfo_rootx(),window.winfo_rooty();w,h=window.winfo_width(),window.winfo_height()
+    try:
+        import ctypes
+        from ctypes import wintypes
+        rect=wintypes.RECT()
+        fn=ctypes.windll.user32.GetWindowRect
+        fn.argtypes=[ctypes.c_void_p,ctypes.POINTER(wintypes.RECT)]
+        if fn(int(window.frame(),0),ctypes.byref(rect)):
+            x,y,w,h=rect.left,rect.top,rect.right-rect.left,rect.bottom-rect.top
+    except (AttributeError,OSError,ValueError):pass
     ImageGrab.grab((x,y,x+w,y+h)).save(OUT/name)
 
 for scale in (1.0,1.5):
@@ -80,10 +89,11 @@ for scale in (1.0,1.5):
         ui.refresh_done({**STATE,'accounts':hundred},None)
         assert len(ui.table.get_children())==100
         if hasattr(ui,'choose_theme'):
-            ui.sort_by('account');ui.sort_by('account');assert ui.table.get_children()[0]=='100'
+            ui.sort_by('account');assert ui.table.get_children()[0]=='100'
             ui.search.set('fixture_050');assert len(ui.table.get_children())==1;ui.search.set('')
             ui.apply_theme(mode)
         root.update();capture(root,prefix+'-100-accounts.png')
+        for callback in root.tk.call('after','info'):root.after_cancel(callback)
         root.destroy()
 print('SCREENSHOTS_COMPLETE='+args.label)
 if args.label=='after':

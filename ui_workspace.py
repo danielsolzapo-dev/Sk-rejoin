@@ -190,6 +190,9 @@ class WorkspaceUI:
     def sort_by(self, column):
         self.sort_reverse = not self.sort_reverse if self.sort_column == column else False
         self.sort_column = column
+        for name in self.table['columns']:
+            text = self.table.heading(name, 'text').rstrip(' ↑↓')
+            self.table.heading(name, text=text + (' ↓' if self.sort_reverse else ' ↑') if name == column else text)
         self.filter_accounts()
 
     def row_order(self):
@@ -394,7 +397,7 @@ class WorkspaceUI:
         self.action('/reconnect')
 
     def icon_key(self, row):
-        if row.get('errorCode') or 'erro' in row.get('status', '').lower():
+        if self.row_has_error(row):
             return 'error'
         if row.get('age') is not None and row['age'] < 20:
             return 'online'
@@ -504,3 +507,13 @@ class WorkspaceUI:
             requested_width, requested_height = map(int, match.groups())
             self.root.geometry(f'{requested_width + width - actual[0]}x{requested_height + height - actual[1]}')
             self.root.after_idle(lambda: self.calibrate_content_size(attempt + 1))
+
+    @staticmethod
+    def row_has_error(row):
+        status = row.get('status', '').casefold()
+        return bool(row.get('errorCode')) or any((word in status for word in ('erro', 'recusad', 'falhou')))
+
+    def update_footer(self):
+        if hasattr(self, 'footer_selection'):
+            errors = sum((self.row_has_error(row) for row in self.rows.values()))
+            self.footer_selection.config(text=tr('ui_df71a54f3933', p0=len(self.ids()), p1=errors))
