@@ -2,9 +2,9 @@
 
 Aplicativo Windows x64 para organizar suas contas Roblox e acompanhar sessões por Heartbeat. O layout compacto mantém os controles de entrada à direita e a lista de contas à esquerda.
 
-## Revamp visual 2 — versão 0.12.0 em revisão
+## Revamp visual 2 — versão 0.12.0
 
-O redesign está na branch `ui/revamp-2`. Não alterou a emissão de tickets, reconexão, BLOCK ACC ou sessões protegidas pelo Windows. **O 403 no resgate do ticket continua sendo um problema funcional conhecido.**
+O redesign foi incorporado à `main` para publicação da versão 0.12.0 pelo GitHub Releases. Mantém os serviços de autenticação, reconexão, BLOCK ACC e os formatos de sessões existentes.
 
 ### Antes e depois
 
@@ -16,11 +16,25 @@ O redesign está na branch `ui/revamp-2`. Não alterou a emissão de tickets, re
 
 As imagens mostram contas fictícias. [Matriz completa](docs/screenshots/) · [Inventário anterior](docs/INVENTARIO_UI.md) · [Validação visual](docs/VALIDACAO_VISUAL.md) · [Histórico](CHANGELOG.md).
 
-A prévia refinada tem rodapé em duas linhas, chips acessíveis, colunas automáticas, estados semânticos e destinos recentes. [Comparação completa](docs/screenshots/comparison.png). As larguras ajustadas manualmente são mantidas nas preferências visuais; a coluna Estado absorve a área restante.
+A interface refinada tem rodapé em duas linhas, chips acessíveis, colunas automáticas, estados semânticos e destinos recentes. [Comparação completa](docs/screenshots/comparison.png). As larguras ajustadas manualmente são mantidas nas preferências visuais; a coluna Estado absorve a área restante.
+
+## Instalação em Windows recém-formatado
+
+O EXE inclui o interpretador Python e as bibliotecas Python da aplicação. Não é necessário instalar Python, pip, Pillow, pystray ou Playwright separadamente para executar o EXE.
+
+| Componente | Quando usar | Download |
+| --- | --- | --- |
+| SK Rejoin x64 | Aplicativo | [Versão publicada](https://github.com/danielsolzapo-dev/Sk-rejoin/releases/latest/download/RejoinDesk.exe) |
+| Roblox | Cliente do jogo e protocolo registrado no Windows | [Site oficial](https://www.roblox.com/download) |
+| Chrome ou Edge | Login manual e User:Pass abrem um navegador instalado; Edge moderno já instalado também serve | [Chrome oficial](https://www.google.com/intl/pt-BR/chrome/) |
+| Microsoft Visual C++ v14 x64 | Runtime recomendado em uma instalação limpa; útil se houver erro de DLL/runtime | [Microsoft](https://aka.ms/vc14/vc_redist.x64.exe) |
+| WebLauncher | Opcional, para quem usa essa integração em Configurações | [Releases do projeto](https://github.com/vnnaworks/weblauncher/releases/latest) |
+
+Instale o cliente Roblox e um dos navegadores. Abra o SK Rejoin, adicione suas contas e configure o destino. Para Heartbeat, copie novamente o script fornecido pelo próprio APP, com a chave desta instalação. O WebLauncher é uma ferramenta separada e não é requisito para executar a interface do SK Rejoin.
 
 ## Uso rápido
 
-1. Baixe o executável da versão publicada em Releases. Prévia de branch não é instalada pelo atualizador estável.
+1. Baixe o [SK Rejoin para Windows x64](https://github.com/danielsolzapo-dev/Sk-rejoin/releases/latest/download/RejoinDesk.exe). O atualizador consulta as versões publicadas em GitHub Releases.
 2. Use Adicionar conta para login manual oficial; a seta mantém User:Pass e Cookies. Conclua pessoalmente verificações solicitadas no navegador.
 3. Selecione uma conta, informe Place ID e use Entrar. Em Heartbeat, copie o script fornecido pelo serviço e configure seu ambiente local. O sinal confirma a conexão observada pelo APP.
 
