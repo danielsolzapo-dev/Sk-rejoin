@@ -8,7 +8,7 @@ import subprocess
 import sys
 from urllib.request import urlopen
 
-VERSION = "0.12.0"
+VERSION = "0.12.1"
 LIMIT = 100 * 1024 * 1024
 
 def version(value):
@@ -74,3 +74,4 @@ for ($i=0; $i -lt 80; $i++) {
         if created:
             staged.unlink(missing_ok=True)
         raise
+

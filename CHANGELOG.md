@@ -1,5 +1,15 @@
 # Histórico de versões
 
+## 0.12.1 — instalador de APK para MuMu
+
+- Utilitários → MuMu / Delta e atalho em Configurações → Avançado.
+- Procura do ADB em pastas conhecidas, seleção manual e conexão por porta local; destino explícito por instância.
+- Download da versão indicada pelo índice público encontrado no site informado pelo usuário; progresso, cancelamento e validação estrutural do APK antes do envio.
+- Instalação pelo ADB somente no destino selecionado, com alternativa para APK local. Não desinstala, não apaga dados, não concede permissões extras e não executa scripts.
+- Cancelar interrompe download/espera, mas não desfaz uma instalação já enviada ao Android. O SHA-256 identifica os bytes recebidos; não certifica o fabricante.
+- Testes com transporte/ADB simulados; a instalação real e compatibilidade com o MuMu atual exigem teste no PC. Não implementa rejoin Android nem resolve verificações do Delta.
+
+
 ## Refinamento da prévia 0.12.0 — composição compacta
 
 - Colunas medidas pelo conteúdo, Estado flexível, rolagem horizontal condicional e larguras manuais isoladas por usuário.
@@ -160,6 +170,7 @@ Abra o SK Rejoin antes do Roblox para reservar o modo multi-instância. Configur
 Em Heartbeat, copie o coletor para cada cliente com HTTP local. Após uma nova abertura, o coletor precisa executar novamente para confirmar a conta. O limite de FPS usa ClientAppSettings e aplica na próxima abertura do Roblox. A compatibilidade depende do cliente instalado.
 
 O GitHub Actions compila e publica a versão declarada em update.py. Testes de reconexão e API usam processos simulados. Valide abertura, permissões e multi-instância nos seus PCs Windows.
+
 
 
 
