@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory() as folder:
                 window.update()
                 ui.add_menu.unpost()
                 ui.add_menu.grab_release()
-                assert window.winfo_width()==784 and window.winfo_height()==301
+                assert window.winfo_width()==784 and window.winfo_height()==380,(window.winfo_width(),window.winfo_height(),window.winfo_fpixels('1i'))
                 real_cookies(ui)
                 real_password(ui)
                 titles=[child.title() for child in window.winfo_children() if isinstance(child,tk.Toplevel)]

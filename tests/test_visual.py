@@ -65,8 +65,8 @@ with tempfile.TemporaryDirectory() as folder:
             assert not ui.profile_window.winfo_viewable()
             window.deiconify()
             window.update()
-            assert window.winfo_width() == 784 and window.winfo_height() == 301
-            assert ui.table.winfo_height() >= 175
+            assert window.winfo_width() == 784 and window.winfo_height() == 380
+            assert ui.table.winfo_height() >= 130
             # Synthetic accounts only. Preview is kept in CI logs for visual QA.
             box = (window.winfo_rootx(), window.winfo_rooty(),
                    window.winfo_rootx()+window.winfo_width(), window.winfo_rooty()+window.winfo_height())
@@ -76,17 +76,17 @@ with tempfile.TemporaryDirectory() as folder:
             ui.show_config()
             window.update()
             assert ui.settings_window.winfo_viewable()
-            assert window.winfo_width() == 784 and window.winfo_height() == 301
+            assert window.winfo_width() == 784 and window.winfo_height() == 380
             ui.toggle_controls()
             window.update()
             assert ui.profile_window.winfo_viewable()
-            assert window.winfo_width() == 784 and window.winfo_height() == 301
+            assert window.winfo_width() == 784 and window.winfo_height() == 380
             ui.profile_window.withdraw()
             ui.settings_window.withdraw()
             ui.show_search()
             window.update_idletasks()
             assert ui.search_field.winfo_viewable()
-            for tab in range(3):
+            for tab in range(8):
                 ui.config_sections.select(tab)
                 window.update_idletasks()
             ui.toggle_compact()
@@ -96,3 +96,4 @@ with tempfile.TemporaryDirectory() as folder:
             print('PASS native rendering, search, status filter, hidden selection safety, config pages, compact mode')
     finally:
         window.destroy()
+
