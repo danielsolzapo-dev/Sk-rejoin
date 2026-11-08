@@ -20,3 +20,22 @@ CATALOG.update({'ref_stage_confirmed':'✓ Heartbeat recebido', 'ref_error_code'
 CATALOG.update({'ref_update_disabled':'Verifique se há uma atualização instalável primeiro.'})
 
 CATALOG.update({'ref_stage_inline':'Etapa: {stage}'})
+
+
+CATALOG.update({
+'mumu_title':'MuMu / Delta — instalar APK',
+'mumu_intro':'Instale o MuMu, abra a instância e habilite o ADB nas configurações do emulador. Escolha o destino abaixo. Cada instalação atua somente na instância selecionada.',
+'mumu_adb':'ADB do MuMu (adb.exe)', 'mumu_browse_adb':'Selecionar ADB', 'mumu_refresh':'Listar instâncias',
+'mumu_port':'Porta mostrada no MuMu (127.0.0.1:porta)', 'mumu_instance':'Instância local de destino',
+'mumu_connect':'Conectar porta', 'mumu_idle':'Selecione o ADB e liste as instâncias disponíveis.',
+'mumu_cancel':'Cancelar download/espera', 'mumu_no_operation':'Não há uma operação em andamento.',
+'mumu_busy':'Aguarde a operação atual terminar.', 'mumu_devices':'{count} instância(s) local(is) pronta(s). Escolha o destino.',
+'mumu_select_instance':'Selecione uma instância conectada antes de instalar.',
+'mumu_not_connected':'A instância escolhida não está conectada. Confira o MuMu.',
+'mumu_installing':'Instalando no Android… Cancelar não desfaz uma instalação já iniciada.',
+'mumu_auto':'Baixar e instalar Delta', 'mumu_local':'Instalar APK local',
+'mumu_source':'Site informado', 'mumu_get_emulator':'Baixar MuMu (site)',
+'mumu_adb_manual':'ADB não selecionado. Instale o MuMu ou escolha o adb.exe manualmente.',
+'mumu_digest':'\nSHA-256 do arquivo recebido: {digest}',
+'mumu_limits':'Fonte: deltaexploits.gg → delta.filenetwork.vip. O SHA-256 identifica o arquivo recebido; não certifica o fabricante. O Android verifica a assinatura na instalação. O APP não desinstala versões, não apaga dados e não executa scripts nem verificações do Delta. Cancelar não desfaz uma instalação já enviada ao Android.'
+})

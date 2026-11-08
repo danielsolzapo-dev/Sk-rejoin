@@ -51,3 +51,20 @@ Preferências de tema, colunas e destinos recentes ficam em `sk-ui.json`, separa
 - Instalação automática via GitHub consulta versões publicadas; dados existentes continuam nos mesmos arquivos. Não há migração do cofre nesta revisão visual.
 - A UI pode mostrar o HTTP recebido e o último sinal; não inventa tempos por etapa que o backend não mede.
 - Automação de contas pode contrariar os termos da plataforma. Esta UI não implementa evasão, CAPTCHA solver ou garantia contra penalidades.
+
+
+## MuMu / Delta — instalação do APK (0.12.1)
+
+1. Instale e abra o MuMu pelo [site do fabricante](https://www.mumuplayer.com/). Ative o ADB e confira a porta dessa instância nas configurações do emulador.
+2. No SK Rejoin, abra **Utilitários → MuMu / Delta — instalar APK** (também em Configurações → Avançado).
+3. Selecione o `adb.exe` da instalação do MuMu; se houver mais de um candidato, escolha o correto. Você também pode selecionar o ADB dos [Android Platform Tools](https://developer.android.com/tools/releases/platform-tools).
+4. Informe `127.0.0.1:porta`, use **Conectar porta** e selecione a instância. Com várias instâncias, nenhuma é escolhida automaticamente.
+5. Clique **Baixar e instalar Delta**. O APP consulta o índice público, baixa um único APK atual e instala somente no destino selecionado. **Instalar APK local** permite usar um arquivo escolhido no PC.
+
+Fonte informada: https://deltaexploits.gg/delta-executor-android. O botão Android dessa página encaminhava para https://delta.filenetwork.vip/android.html; seu índice público é `get_files.php`. O instalador utiliza esse índice e recusa HTML, arquivo incompleto, tamanho divergente ou estrutura de APK inválida. Se a fonte mudar ou exigir uma etapa manual, o APP informa o erro e oferece o site/APK local; não executa JavaScript recebido nem resolve desafios.
+
+A instalação é enviada por `adb -s INSTANCIA install -r APK`. O Android verifica a assinatura; divergência de assinatura não leva a desinstalação automática. Dados e sessões do SK Rejoin não são enviados ao download/ADB. Cancelar não desfaz uma instalação que o Android já recebeu. Confira o resultado no MuMu e conclua pessoalmente a configuração do aplicativo instalado.
+
+Não há certificação do fabricante do APK pelo SK Rejoin. O hash mostrado é calculado localmente para identificar o arquivo recebido. Esta etapa instala o APK; não implementa reconexão dentro do Android, execução de scripts nem garantia de compatibilidade do Delta/Roblox no emulador.
+
+Validação: `tests/test_mumu_installer.py` cobre destino local exato, múltiplas instâncias, rejeição de USB/endereço remoto, cancelamento, integridade estrutural, limpeza de download parcial, preservação em falha de assinatura e smoke nativo da janela. A instalação real no MuMu não foi executada pelo CI.

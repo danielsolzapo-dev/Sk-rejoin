@@ -30,7 +30,7 @@ ROWS=[{'userId':i,'username':name,'status':status,'connection':connection,'age':
           ('sk_aurora','Online','Conectado',2,None),('sk_horizon','BLOCK ACC · troca de servidor solicitada','Conectado',3,None),
           ('sk_lunar','Aguardando heartbeat','Carregando',4,None),('sk_nova','Sem sinal','Sem sinal',65,None),
           ('sk_orion','Recuperando conexão','Erro 773',2,773)],1)]
-STATE={'accounts':ROWS,'waiting':0,'busy':False,'version':'0.12.0 UI preview','multi':'Múltiplas instâncias observadas',
+STATE={'accounts':ROWS,'waiting':0,'busy':False,'version':'0.12.1','multi':'Múltiplas instâncias observadas',
        'rejoin':5,'startupStatus':'2/4 · WebLauncher — aguardando 10 s','repo':''}
 
 
@@ -93,7 +93,7 @@ for scale in (1.0,1.5):
             ui.config_sections.select(index);root.update();capture(ui.settings_window,prefix+f'-config-{index}.png')
         ui.settings_window.withdraw();ui.toggle_controls();root.update();capture(ui.profile_window,prefix+'-profile.png');ui.profile_window.withdraw()
         methods=['connection_details','auth_check','diagnostic','heartbeat','fps_dialog','updates','history','import_dialog','password_dialog','manual_dialog']
-        if args.label!='before':methods+=['first_run','column_dialog','command_palette']
+        if args.label!='before':methods+=['first_run','column_dialog','command_palette','mumu_dialog']
         for method in methods:
             previous=set(root.winfo_children());getattr(ui,method)();root.update()
             dialogs=[w for w in root.winfo_children() if isinstance(w,tk.Toplevel) and w not in previous]

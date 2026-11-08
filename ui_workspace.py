@@ -8,8 +8,9 @@ from tkinter import ttk, messagebox
 import theme
 import ui_preferences
 from ui_refinement import RefinedUI, semantic_state
+from mumu_ui import MuMuUI
 
-class WorkspaceUI(RefinedUI):
+class WorkspaceUI(RefinedUI, MuMuUI):
 
     def init_workspace(self):
         self.palette = dict(theme.DARK)
@@ -99,6 +100,8 @@ class WorkspaceUI(RefinedUI):
         self.load_ui_icons()
         self.apply_theme('dark')
         self.init_refinement()
+        utilities=self.root.nametowidget(self.menubar.entrycget(1,'menu'))
+        utilities.add_command(label=tr('mumu_title'),command=self.mumu_dialog)
 
         def load():
             value = ui_preferences.load()
@@ -379,6 +382,7 @@ class WorkspaceUI(RefinedUI):
             tk.Radiobutton(appearance, text=title, variable=self.theme_choice, value=mode, command=lambda m=mode: self.choose_theme(m)).pack(anchor='w', padx=16, pady=6)
         self.button(appearance, tr('ui_e6ead528437c'), lambda: self.choose_theme('dark')).pack(anchor='w', padx=16, pady=12)
         self.button(appearance, tr('ui_faa03560c030'), self.column_dialog).pack(anchor='w', padx=16, pady=8)
+        self.button(advanced,tr('mumu_title'),self.mumu_dialog).pack(anchor='w',padx=16,pady=5)
         self.label(advanced, tr('ui_d73dd1539db1'), size=14, bold=True).pack(anchor='w', padx=16, pady=12)
         for title, action in [(tr('ui_41c95b03ecdf'), self.diagnostic), (tr('ui_7e96f97a3fbf'), self.auth_check), (tr('ui_fef9495ee515'), self.history), (tr('ui_cfeb11c07f77'), self.updates), (tr('ui_eb4d4196e7cc'), self.heartbeat)]:
             self.button(advanced, title, action).pack(anchor='w', padx=16, pady=5)
@@ -552,3 +556,4 @@ class WorkspaceUI(RefinedUI):
             self.profile_dirty = False
             self.load_profile()
         self.profile_window.withdraw()
+
