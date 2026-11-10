@@ -68,3 +68,19 @@ A instalação é enviada por `adb -s INSTANCIA install -r APK`. O Android verif
 Não há certificação do fabricante do APK pelo SK Rejoin. O hash mostrado é calculado localmente para identificar o arquivo recebido. Esta etapa instala o APK; não implementa reconexão dentro do Android, execução de scripts nem garantia de compatibilidade do Delta/Roblox no emulador.
 
 Validação: `tests/test_mumu_installer.py` cobre destino local exato, múltiplas instâncias, rejeição de USB/endereço remoto, cancelamento, integridade estrutural, limpeza de download parcial, preservação em falha de assinatura e smoke nativo da janela. A instalação real no MuMu não foi executada pelo CI.
+
+
+## Copiar sessão de uma conta (0.12.2)
+
+Selecione uma conta e use **Contas → Copiar cookie…** ou o menu do botão direito.
+No diálogo, escolha somente cookie ou `nick:senha:cookie` e clique em Copiar.
+A sessão vem apenas do cofre local deste usuário Windows. Não há busca em outros
+navegadores/computadores nem envio de cookies ao GitHub ou novo endpoint HTTP.
+
+Como o Rejoin não guarda senhas, o formato completo pede que você digite a senha
+para aquela cópia. Ela não é recuperada do cookie, não é validada pela exportação,
+não é salva e o campo é limpo ao iniciar a cópia/fechar. O cookie não aparece no
+diálogo. Cada exportação é de uma única conta, e a área de transferência é limpa
+após 30 segundos se você ainda não tiver copiado outro texto. Isso não apaga
+históricos ou cópias já mantidas por outros aplicativos. Fechar o Rejoin antes do
+prazo interrompe o timer; limpe a área de transferência manualmente nesse caso.

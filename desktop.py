@@ -59,6 +59,9 @@ class Desktop(WorkspaceUI):
         for title, action in ((tr('ui_9e77511a41de'), self.password_dialog), (tr('ui_3b85b826d713'), self.import_dialog), (tr('ui_8366d72b4661'), self.select_all), (tr('ui_b6ae7ef07df1'), self.remove)):
             accounts_menu.add_command(label=title, command=action)
         accounts_menu.add_separator()
+        accounts_menu.add_command(label=tr('export_cookie_menu'), command=lambda: self.export_account('cookie'))
+        accounts_menu.add_command(label=tr('export_combined_menu'), command=lambda: self.export_account('combined'))
+        accounts_menu.add_separator()
         accounts_menu.add_command(label=tr('ui_8041ee4c59fa'), command=root.destroy)
         menubar.add_cascade(label=tr('ui_88235861896f'), menu=accounts_menu)
         utilities = tk.Menu(menubar, tearoff=False, bg=PANEL, fg=TEXT)
@@ -725,6 +728,10 @@ class Desktop(WorkspaceUI):
             self.root.clipboard_clear()
             self.root.clipboard_append(text)
 
+    def export_account(self, mode='cookie'):
+        from session_export_ui import show_export
+        return show_export(self, mode)
+
     def account_context(self, event):
         identity = self.table.identify_row(event.y)
         if identity and identity not in self.table.selection():
@@ -732,6 +739,9 @@ class Desktop(WorkspaceUI):
         menu = tk.Menu(self.root, tearoff=False, bg=PANEL, fg=TEXT)
         for title, action in ((tr('ui_535bc78c9148'), self.launch), (tr('ui_64d04acedf37'), lambda: self.action('/reconnect')), (tr('ui_f00fa760c1ff'), self.close_selected), (tr('ui_0eecac926ef6'), lambda: self.action('/pause')), (tr('ui_64feb1dcfd4a'), self.rejoin), (tr('ui_4dc412e47058'), lambda: self.copy_account('username')), (tr('ui_e4b299310335'), lambda: self.copy_account('userId')), (tr('ui_6dd94e23a8f9'), self.connection_details), (tr('ui_4bd4ea834263'), self.remove)):
             menu.add_command(label=title, command=action)
+        menu.add_separator()
+        menu.add_command(label=tr('export_cookie_menu'), command=lambda: self.export_account('cookie'))
+        menu.add_command(label=tr('export_combined_menu'), command=lambda: self.export_account('combined'))
         theme.apply(menu, self.palette, getattr(self, 'ui_scale', 1.0))
         try:
             menu.tk_popup(event.x_root, event.y_root)

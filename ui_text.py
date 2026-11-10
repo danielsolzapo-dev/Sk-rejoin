@@ -39,3 +39,23 @@ CATALOG.update({
 'mumu_digest':'\nSHA-256 do arquivo recebido: {digest}',
 'mumu_limits':'Fonte: deltaexploits.gg → delta.filenetwork.vip. O SHA-256 identifica o arquivo recebido; não certifica o fabricante. O Android verifica a assinatura na instalação. O APP não desinstala versões, não apaga dados e não executa scripts nem verificações do Delta. Cancelar não desfaz uma instalação já enviada ao Android.'
 })
+
+CATALOG.update({
+    'export_title': 'Copiar sessão da conta',
+    'export_select_one': 'Selecione exatamente uma conta para copiar a sessão.',
+    'export_account': 'Conta selecionada: {username}',
+    'export_help': 'Copie a sessão local desta conta. O cookie não será exibido. O texto copiado dá acesso à conta; cole apenas onde você confia. A cópia é limpa após 30 segundos se ainda estiver na área de transferência.',
+    'export_cookie': 'Somente cookie',
+    'export_combined': 'nick:senha:cookie',
+    'export_password': 'Senha para esta cópia (o Rejoin não armazena nem recupera a senha):',
+    'export_password_required': 'Informe a senha para montar nick:senha:cookie, ou escolha somente cookie.',
+    'export_invalid': 'Formato ou conta inválida para exportação.',
+    'export_unavailable': 'Não foi possível ler a sessão local. Adicione a conta novamente neste usuário Windows.',
+    'export_clipboard_failed': 'Não foi possível copiar. Tente novamente.',
+    'export_copied': 'Copiado. Cole em até 30 segundos. A senha informada não foi salva.',
+    'export_preparing': 'Preparando a cópia local…',
+    'export_copy': 'Copiar para a área de transferência',
+    'export_close': 'Fechar',
+    'export_cookie_menu': 'Copiar cookie…',
+    'export_combined_menu': 'Copiar nick:senha:cookie…',
+})

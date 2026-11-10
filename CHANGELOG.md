@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 0.12.2 — 2026-11-10
+
+- Menu Contas e clique direito: copiar cookie ou nick:senha:cookie de uma conta selecionada.
+- Sessão lida exclusivamente do cofre local, em worker; nenhum novo endpoint HTTP de exportação.
+- Cookie não exibido; senha preenchida manualmente só para a cópia, sem armazenamento.
+- Área de transferência limpa após 30 s somente se ainda contiver o texto copiado pelo app.
+- Testes de formato, falhas, seleção, worker, clipboard e diálogo com contas sintéticas.
+
+
 ## 0.12.1 — instalador de APK para MuMu
 
 - Utilitários → MuMu / Delta e atalho em Configurações → Avançado.
